@@ -8,16 +8,22 @@ from bot_state import state
 from utils import save_chat_id, load_messages, load_saved_chat_id
 from keywords_handler import get_keywords_config, reload_keywords_config, send_keyword_response
 from datetime import datetime
+from utils import get_chat_id_from_event
 
 logger = logging.getLogger(__name__)
 
 
 async def ensure_chat_id(event: MessageCreated) -> None:
-    """Сохраняет chat_id из события"""
-    chat_id = event.message.chat_id
+    """Сохраняет chat_id из события (универсальный способ)"""
+    chat_id = get_chat_id_from_event(event)
+    if chat_id is None:
+        logger.warning("Не удалось получить chat_id, пропускаем")
+        return
+    
     if state.chat_id != chat_id:
         state.chat_id = chat_id
         save_chat_id(state.chat_id)
+        logger.info(f"Сохранён chat_id: {state.chat_id}")
 
 
 def register_handlers(dp):
