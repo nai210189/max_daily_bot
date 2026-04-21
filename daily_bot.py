@@ -129,9 +129,7 @@ async def daily_scheduler() -> None:
 
 # ===== ОБРАБОТЧИКИ КОМАНД =====
 async def _ensure_chat_id(event: MessageCreated) -> None:
-    """Сохраняет chat_id из события"""
-    # ✅ Правильно: chat_id находится в event.message
-    chat_id = event.message.chat_id
+    chat_id = event.message.chat_id  # ✅ ПРАВИЛЬНО
     if state.chat_id != chat_id:
         state.chat_id = chat_id
         save_chat_id(state.chat_id)
