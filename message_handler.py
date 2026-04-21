@@ -1,14 +1,14 @@
 import logging
 import random
 from pathlib import Path
+from datetime import datetime
 
 from maxapi.types import MessageCreated, Command, BotStarted
+
 from config import MY_TIMEZONE, MESSAGES_FILE, SEND_HOUR, SEND_MINUTE
 from bot_state import state
-from utils import save_chat_id, load_messages, load_saved_chat_id
+from utils import save_chat_id, load_messages, load_saved_chat_id, get_chat_id_from_event
 from keywords_handler import get_keywords_config, reload_keywords_config, send_keyword_response
-from datetime import datetime
-from utils import get_chat_id_from_event
 
 logger = logging.getLogger(__name__)
 
@@ -135,31 +135,37 @@ async def cmd_test(event: MessageCreated):
 
     @dp.message_created(Command('reload'))
     async def cmd_reload(event: MessageCreated):
-        if state.chat_id is not None and event.message.chat_id != state.chat_id:
-            await event.message.answer("❌ У вас нет прав для этой команды.")
-            return
-        try:
-            reload_keywords_config()
-            await event.message.answer("✅ Ключевые слова успешно перезагружены из keywords.json!")
-        except Exception as e:
-            await event.message.answer(f"❌ Ошибка при перезагрузке: {e}")
+    # ✅ Исправлено: используем универсальную функцию
+    current_chat_id = get_chat_id_from_event(event)
+    
+    if state.chat_id is not None and current_chat_id != state.chat_id:
+        await event.message.answer("❌ У вас нет прав для этой команды.")
+        return
+    
+    try:
+        reload_keywords_config()
+        await event.message.answer("✅ Ключевые слова успешно перезагружены из keywords.json!")
+    except Exception as e:
+        await event.message.answer(f"❌ Ошибка при перезагрузке: {e}")
 
     @dp.message_created()
     async def handle_keywords(event: MessageCreated):
-        text = getattr(event.message, 'text', '') or ''
-        text_lower = text.lower().strip()
-        
-        if text_lower.startswith('/') or len(text_lower) > 100:
-            return
-        
-        responses = get_keywords_config()
-        for response in responses:
-            keywords_lower = [kw.lower() for kw in response.get("keywords", [])]
-            for keyword in keywords_lower:
-                if keyword in text_lower:
-                    logger.info(f"Сработало ключевое слово '{keyword}' в чате {event.message.chat_id}")
-                    await send_keyword_response(event, response)
-                    return
+    text = getattr(event.message, 'text', '') or ''
+    text_lower = text.lower().strip()
+    
+    if text_lower.startswith('/') or len(text_lower) > 100:
+        return
+    
+    responses = get_keywords_config()
+    for response in responses:
+        keywords_lower = [kw.lower() for kw in response.get("keywords", [])]
+        for keyword in keywords_lower:
+            if keyword in text_lower:
+                # ✅ Исправлено: используем универсальную функцию
+                chat_id = get_chat_id_from_event(event)
+                logger.info(f"Сработало ключевое слово '{keyword}' в чате {chat_id}")
+                await send_keyword_response(event, response)
+                return
 
     @dp.message_created()
     async def handle_unknown(event: MessageCreated):
