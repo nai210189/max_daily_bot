@@ -2,48 +2,68 @@ import asyncio
 import logging
 import random
 import os
-from datetime import datetime, time
+from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Final
 
 from maxapi import Bot, Dispatcher
 from maxapi.types import MessageCreated, Command
 
-# Настройка логирования
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
 # ===== КОНФИГУРАЦИЯ =====
-# Токен берём из переменных окружения (безопасно для хостинга)
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+# Используем Final для констант (Python 3.8+)
+BOT_TOKEN: Final[str | None] = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN не найден! Установите переменную окружения BOT_TOKEN")
 
-MESSAGES_FILE = "messages.txt"  # Файл с сообщениями
-CHAT_ID = None  # ID чата, куда отправлять (запоминается после /start)
+MESSAGES_FILE: Final[Path] = Path("messages.txt")
+CHAT_ID_FILE: Final[Path] = Path("chat_id.txt")
+SEND_HOUR: Final[int] = 9
+SEND_MINUTE: Final[int] = 0
+
+# Настройка логирования с более информативным форматом
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
+)
+logger = logging.getLogger(__name__)
 
 # Создаём бота и диспетчера
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
+# Глобальное состояние (используем simple storage)
+class BotState:
+    __slots__ = ('chat_id',)  # Экономия памяти
+    def __init__(self):
+        self.chat_id: int | None = None
+
+state = BotState()
+
 
 # ===== РАБОТА С БАЗОЙ СООБЩЕНИЙ =====
+def _create_example_messages() -> None:
+    """Создаёт файл с примерами сообщений (внутренняя функция)"""
+    example_messages = [
+        "Доброе утро! Хорошего дня! ☀️",
+        "Не забывайте пить воду 💧",
+        "Сегодня отличный день для новых свершений! 🚀",
+        "Улыбнитесь, это бесплатно 😊",
+        "Среда — маленькая пятница! 🎉"
+    ]
+    MESSAGES_FILE.write_text('\n'.join(example_messages), encoding='utf-8')
+    logger.info(f"Создан файл {MESSAGES_FILE} с примерами сообщений")
+
+
 def load_messages() -> list[str]:
-    """Загружает сообщения из текстового файла, по одному на строку"""
-    if not Path(MESSAGES_FILE).exists():
-        # Если файла нет - создаём с примерами
-        example_messages = [
-            "Доброе утро! Хорошего дня! ☀️",
-            "Не забывайте пить воду 💧",
-            "Сегодня отличный день для новых свершений! 🚀",
-            "Улыбнитесь, это бесплатно 😊",
-            "Среда — маленькая пятница! 🎉"
-        ]
-        with open(MESSAGES_FILE, 'w', encoding='utf-8') as f:
-            f.write('\n'.join(example_messages))
-        logger.info(f"Создан файл {MESSAGES_FILE} с примерами сообщений")
+    """Загружает сообщения из текстового файла"""
+    if not MESSAGES_FILE.exists():
+        _create_example_messages()
     
-    with open(MESSAGES_FILE, 'r', encoding='utf-8') as f:
-        messages = [line.strip() for line in f if line.strip()]
+    # Используем read_text() вместо open + read
+    content = MESSAGES_FILE.read_text(encoding='utf-8')
+    # filter + list comprehension (Python 3.11 оптимизирован)
+    messages = [line.strip() for line in content.splitlines() if line.strip()]
     
     if not messages:
         raise ValueError(f"Файл {MESSAGES_FILE} пуст! Добавьте хотя бы одно сообщение.")
@@ -52,16 +72,40 @@ def load_messages() -> list[str]:
 
 
 def get_random_message(messages: list[str]) -> str:
-    """Возвращает случайное сообщение из списка"""
+    """Возвращает случайное сообщение"""
     return random.choice(messages)
 
 
-# ===== ОТПРАВКА ЕЖЕДНЕВНОГО СООБЩЕНИЯ =====
-async def send_daily_message():
+# ===== РАБОТА С CHAT_ID =====
+def save_chat_id(chat_id: int) -> None:
+    """Сохраняет chat_id в файл"""
+    CHAT_ID_FILE.write_text(str(chat_id), encoding='utf-8')
+
+
+def load_saved_chat_id() -> int | None:
+    """Загружает сохранённый chat_id из файла"""
+    if CHAT_ID_FILE.exists():
+        try:
+            return int(CHAT_ID_FILE.read_text(encoding='utf-8').strip())
+        except (ValueError, OSError):
+            logger.warning("Не удалось прочитать сохранённый chat_id")
+    return None
+
+
+# ===== ПЛАНИРОВЩИК =====
+def get_next_run_time() -> datetime:
+    """Рассчитывает следующее время запуска (9:00 следующего дня)"""
+    now = datetime.now()
+    # Используем replace с проверкой (более эффективно чем if)
+    target = now.replace(hour=SEND_HOUR, minute=SEND_MINUTE, second=0, microsecond=0)
+    if now >= target:
+        target += timedelta(days=1)
+    return target
+
+
+async def send_daily_message() -> None:
     """Отправляет случайное сообщение в нужный чат"""
-    global CHAT_ID
-    
-    if CHAT_ID is None:
+    if state.chat_id is None:
         logger.warning("Чат не установлен. Бот никому не отправит сообщение.")
         return
     
@@ -69,112 +113,110 @@ async def send_daily_message():
         messages = load_messages()
         daily_text = get_random_message(messages)
         
-        await bot.send_message(chat_id=CHAT_ID, text=daily_text)
-        logger.info(f"Ежедневное сообщение отправлено в чат {CHAT_ID}: {daily_text[:50]}...")
+        await bot.send_message(chat_id=state.chat_id, text=daily_text)
+        logger.info(f"Сообщение отправлено в чат {state.chat_id}: {daily_text[:50]}...")
     except Exception as e:
-        logger.error(f"Ошибка при отправке сообщения: {e}")
+        logger.error(f"Ошибка при отправке: {e}", exc_info=True)
 
 
-async def daily_scheduler():
-    """Планировщик, который запускает отправку каждый день в 9:00"""
+async def daily_scheduler() -> None:
+    """Планировщик отправки сообщений"""
     while True:
-        now = datetime.now()
-        # Целевое время - сегодня в 9:00
-        target = now.replace(hour=9, minute=0, second=0, microsecond=0)
+        target = get_next_run_time()
+        wait_seconds = (target - datetime.now()).total_seconds()
         
-        # Если уже прошло 9:00 сегодня - планируем на завтра
-        if now >= target:
-            target = target.replace(day=now.day + 1)
-        
-        # Сколько секунд ждать до 9:00
-        wait_seconds = (target - now).total_seconds()
-        
-        # Округляем до целых секунд для красоты лога
-        hours = int(wait_seconds // 3600)
-        minutes = int((wait_seconds % 3600) // 60)
+        # Форматируем время ожидания
+        wait_delta = timedelta(seconds=wait_seconds)
+        hours = wait_delta.seconds // 3600
+        minutes = (wait_delta.seconds % 3600) // 60
         
         logger.info(f"Следующая отправка через {hours}ч {minutes}мин (в {target.strftime('%H:%M %d.%m.%Y')})")
         
-        await asyncio.sleep(wait_seconds)
+        # Используем asyncio.sleep с обработкой прерываний
+        try:
+            await asyncio.sleep(wait_seconds)
+        except asyncio.CancelledError:
+            logger.info("Планировщик остановлен")
+            break
         
-        # Отправляем сообщение
         await send_daily_message()
 
 
-# ===== ОБРАБОТЧИКИ КОМАНД ПОЛЬЗОВАТЕЛЯ =====
+# ===== ОБРАБОТЧИКИ КОМАНД =====
+async def _ensure_chat_id(event: MessageCreated) -> None:
+    """Гарантирует, что chat_id сохранён (вспомогательная функция)"""
+    if state.chat_id != event.message.chat.id:
+        state.chat_id = event.message.chat.id
+        save_chat_id(state.chat_id)
+
+
 @dp.message_created(Command('start'))
 async def cmd_start(event: MessageCreated):
-    """При команде /start - запоминаем чат и приветствуем"""
-    global CHAT_ID
-    
-    chat_id = event.message.chat.id
-    CHAT_ID = chat_id
-    
-    # Сохраняем chat_id в файл, чтобы не потерять при перезапуске
-    with open("chat_id.txt", "w") as f:
-        f.write(str(chat_id))
+    """Активация бота"""
+    await _ensure_chat_id(event)
     
     await event.message.answer(
         "✅ Бот активирован!\n\n"
-        "Теперь каждый день в 9:00 я буду присылать случайное сообщение из моей базы.\n\n"
-        "Команды:\n"
-        "/test - отправить тестовое сообщение прямо сейчас\n"
-        "/add <текст> - добавить новое сообщение в базу\n"
-        "/list - показать все сообщения в базе\n"
-        "/stats - показать статистику"
+        "Теперь каждый день в 9:00 я буду присылать случайное сообщение.\n\n"
+        "📋 Команды:\n"
+        "/test - тестовое сообщение\n"
+        "/add <текст> - добавить сообщение\n"
+        "/list - список сообщений\n"
+        "/stats - статистика\n"
+        "/time - время на сервере"
     )
+    logger.info(f"Бот активирован в чате {state.chat_id}")
 
 
 @dp.message_created(Command('test'))
 async def cmd_test(event: MessageCreated):
-    """Отправляет случайное сообщение сразу (для теста)"""
+    """Тестовая отправка"""
     try:
         messages = load_messages()
         test_text = get_random_message(messages)
-        await event.message.answer(f"🧪 Тестовое сообщение:\n\n{test_text}")
-        logger.info(f"Тестовое сообщение отправлено пользователю {event.message.chat.id}")
+        await event.message.answer(f"🧪 Тест:\n\n{test_text}")
+        logger.debug(f"Тест отправлен в чат {event.message.chat.id}")
     except Exception as e:
         await event.message.answer(f"❌ Ошибка: {e}")
+        logger.error(f"Ошибка в /test: {e}")
 
 
 @dp.message_created(Command('add'))
 async def cmd_add(event: MessageCreated):
-    """Добавляет новое сообщение в базу"""
-    # Получаем текст после команды /add
-    message_text = event.message.body.get('text', '')
-    parts = message_text.split(maxsplit=1)
-    
-    if len(parts) < 2:
-        await event.message.answer("❌ Использование: /add <текст сообщения>")
-        return
-    
-    new_message = parts[1].strip()
-    
-    # Добавляем в файл
-    with open(MESSAGES_FILE, 'a', encoding='utf-8') as f:
-        f.write(f"\n{new_message}")
-    
-    await event.message.answer(f"✅ Сообщение добавлено:\n\n{new_message}")
+    """Добавление сообщения"""
+    # Используем match-case (Python 3.10+)
+    text = event.message.body.get('text', '') if event.message.body else ''
+    match text.split(maxsplit=1):
+        case [_, new_message] if new_message.strip():
+            # Добавляем с новой строки
+            with MESSAGES_FILE.open('a', encoding='utf-8') as f:
+                f.write(f"\n{new_message.strip()}")
+            await event.message.answer(f"✅ Добавлено:\n\n{new_message.strip()}")
+            logger.info(f"Добавлено сообщение: {new_message.strip()[:50]}...")
+        case _:
+            await event.message.answer("❌ Использование: /add <текст сообщения>")
 
 
 @dp.message_created(Command('list'))
 async def cmd_list(event: MessageCreated):
-    """Показывает все сообщения из базы"""
+    """Список сообщений"""
     try:
         messages = load_messages()
         
         if not messages:
-            await event.message.answer("📭 База сообщений пуста.")
+            await event.message.answer("📭 База пуста.")
             return
         
-        # Формируем красивое сообщение со списком
-        list_text = "📋 **Список сообщений в базе:**\n\n"
-        for i, msg in enumerate(messages, 1):
-            # Обрезаем слишком длинные сообщения для списка
-            display_msg = msg[:50] + "..." if len(msg) > 50 else msg
-            list_text += f"{i}. {display_msg}\n"
+        # Используем f-string с join для эффективности
+        items = [f"{i}. {msg[:50] + '...' if len(msg) > 50 else msg}" 
+                 for i, msg in enumerate(messages, 1)]
+        list_text = f"📋 **Сообщения ({len(messages)}):**\n\n" + '\n'.join(items)
         
-        await event.message.answer(list_text)
+        # MAX имеет лимит ~4096 символов
+        if len(list_text) > 4000:
+            await event.message.answer(f"📋 Всего сообщений: {len(messages)} (слишком много для списка)")
+        else:
+            await event.message.answer(list_text)
             
     except Exception as e:
         await event.message.answer(f"❌ Ошибка: {e}")
@@ -182,20 +224,22 @@ async def cmd_list(event: MessageCreated):
 
 @dp.message_created(Command('stats'))
 async def cmd_stats(event: MessageCreated):
-    """Показывает статистику базы сообщений"""
+    """Статистика"""
     try:
         messages = load_messages()
         total = len(messages)
+        avg_len = sum(len(m) for m in messages) // total if total else 0
         
-        # Считаем среднюю длину сообщения
-        avg_len = sum(len(msg) for msg in messages) // total if total > 0 else 0
+        # Используем match для форматирования (Python 3.10+)
+        size_kb = MESSAGES_FILE.stat().st_size / 1024
         
         stats_text = (
-            f"📊 **Статистика базы сообщений**\n\n"
-            f"• Всего сообщений: {total}\n"
-            f"• Средняя длина: {avg_len} символов\n"
-            f"• Файл: {MESSAGES_FILE}\n"
-            f"• Время отправки: 9:00 ежедневно"
+            f"📊 **Статистика**\n\n"
+            f"• Сообщений: {total}\n"
+            f"• Средняя длина: {avg_len} симв.\n"
+            f"• Размер файла: {size_kb:.1f} KB\n"
+            f"• Время отправки: {SEND_HOUR:02d}:{SEND_MINUTE:02d}\n"
+            f"• Чат: {'активирован' if state.chat_id else 'не активирован'}"
         )
         
         await event.message.answer(stats_text)
@@ -206,37 +250,51 @@ async def cmd_stats(event: MessageCreated):
 
 @dp.message_created(Command('time'))
 async def cmd_time(event: MessageCreated):
-    """Показывает текущее время на сервере"""
+    """Текущее время"""
     now = datetime.now()
-    await event.message.answer(f"🕐 Текущее время на сервере: {now.strftime('%H:%M:%S %d.%m.%Y')}")
+    await event.message.answer(f"🕐 {now.strftime('%H:%M:%S %d.%m.%Y')}")
 
 
-# ===== ЗАПУСК БОТА =====
-async def main():
-    global CHAT_ID
+# ===== ОБРАБОТЧИК ДЛЯ НЕИЗВЕСТНЫХ КОМАНД =====
+@dp.message_created()
+async def handle_unknown(event: MessageCreated):
+    """Ответ на неизвестные сообщения"""
+    text = event.message.body.get('text', '') if event.message.body else ''
+    if text and text.startswith('/') and text not in ['/start', '/test', '/add', '/list', '/stats', '/time']:
+        await event.message.answer("❓ Неизвестная команда. Напишите /start для списка команд.")
+
+
+# ===== ЗАПУСК =====
+async def main() -> None:
+    """Главная функция запуска"""
+    logger.info("🚀 Запуск ежедневного бота...")
+    logger.info(f"Python version: 3.11+")
     
-    logger.info("Запуск ежедневного бота...")
-    logger.info(f"BOT_TOKEN: {'Установлен' if BOT_TOKEN else 'ОТСУТСТВУЕТ'}")
+    # Восстанавливаем сохранённый chat_id
+    saved_id = load_saved_chat_id()
+    if saved_id:
+        state.chat_id = saved_id
+        logger.info(f"Восстановлен chat_id: {state.chat_id}")
     
-    # Пытаемся восстановить сохранённый chat_id
-    if Path("chat_id.txt").exists():
-        with open("chat_id.txt", "r") as f:
-            try:
-                CHAT_ID = int(f.read().strip())
-                logger.info(f"Восстановлен chat_id: {CHAT_ID}")
-            except:
-                pass
-    
-    # Запускаем планировщик в фоновом режиме
-    asyncio.create_task(daily_scheduler())
+    # Запускаем планировщик
+    scheduler_task = asyncio.create_task(daily_scheduler())
     
     # Запускаем обработку команд
     await bot.delete_webhook()
-    await dp.start_polling(bot)
+    
+    try:
+        await dp.start_polling(bot)
+    finally:
+        # Корректное завершение при остановке
+        scheduler_task.cancel()
+        await asyncio.gather(scheduler_task, return_exceptions=True)
+        logger.info("Бот остановлен")
 
 
 if __name__ == '__main__':
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        logger.info("Бот остановлен пользователем")
+        logger.info("👋 Бот остановлен пользователем")
+    except Exception as e:
+        logger.error(f"Критическая ошибка: {e}", exc_info=True)
