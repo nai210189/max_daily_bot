@@ -12,7 +12,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # ===== КОНФИГУРАЦИЯ =====
-#BOT_TOKEN = "f9LHodD0cOKO2Y8nxlqx67FOkppCR2lTMkH3d5erq-TRgY08VyEkLY-aqiI79difaBQowe8fxq9yOzhhNtOp"  # Токен от Master Bot
+BOT_TOKEN = "f9LHodD0cOKO2Y8nxlqx67FOkppCR2lTMkH3d5erq-TRgY08VyEkLY-aqiI79difaBQowe8fxq9yOzhhNtOp"  # Токен от Master Bot
 MESSAGES_FILE = "messages.txt"  # Файл с сообщениями
 CHAT_ID = None  # ID чата, куда отправлять. Если None - бот будет ждать команду /start
 
