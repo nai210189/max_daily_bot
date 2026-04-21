@@ -130,8 +130,8 @@ async def daily_scheduler() -> None:
 # ===== ОБРАБОТЧИКИ КОМАНД =====
 async def _ensure_chat_id(event: MessageCreated) -> None:
     """Сохраняет chat_id из события"""
-    # ✅ chat_id доступен напрямую из event, не из event.message
-    chat_id = event.chat_id
+    # ✅ Правильно: chat_id находится в event.message
+    chat_id = event.message.chat_id
     if state.chat_id != chat_id:
         state.chat_id = chat_id
         save_chat_id(state.chat_id)
@@ -139,17 +139,18 @@ async def _ensure_chat_id(event: MessageCreated) -> None:
 @dp.bot_started()
 async def on_bot_started(event: BotStarted):
     """Срабатывает, когда пользователь нажимает 'Начать' в диалоге с ботом"""
-    chat_id = event.chat_id
+    chat_id = event.chat_id  # В BotStarted chat_id доступен напрямую
     state.chat_id = chat_id
     save_chat_id(chat_id)
     await event.bot.send_message(
         chat_id=chat_id,
         text="✅ Бот активирован! Теперь каждый день в 9:00 я буду присылать сообщение."
     )
-    logger.info(f"Бот активирован пользователем {chat_id}")
+    logger.info(f"Бот активирован через BotStarted в чате {chat_id}")
 
 @dp.message_created(Command('start'))
 async def cmd_start(event: MessageCreated):
+    # Сохраняем chat_id (через исправленную _ensure_chat_id)
     await _ensure_chat_id(event)
     
     await event.message.answer(
@@ -171,7 +172,8 @@ async def cmd_test(event: MessageCreated):
         messages = load_messages()
         test_text = get_random_message(messages)
         await event.message.answer(f"🧪 Тест:\n\n{test_text}")
-        logger.debug(f"Тест отправлен в чат {event.chat_id}")
+        # ✅ Здесь тоже используем event.message.chat_id
+        logger.debug(f"Тест отправлен в чат {event.message.chat_id}")
     except Exception as e:
         await event.message.answer(f"❌ Ошибка: {e}")
         logger.error(f"Ошибка в /test: {e}")
