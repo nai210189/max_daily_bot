@@ -59,15 +59,18 @@ def register_handlers(dp):
         logger.info(f"Бот активирован в чате {state.chat_id}")
 
     @dp.message_created(Command('test'))
-    async def cmd_test(event: MessageCreated):
-        try:
-            messages = load_messages()
-            test_text = random.choice(messages)
-            await event.message.answer(f"🧪 Тест:\n\n{test_text}")
-            logger.debug(f"Тест отправлен в чат {event.message.chat_id}")
-        except Exception as e:
-            await event.message.answer(f"❌ Ошибка: {e}")
-            logger.error(f"Ошибка в /test: {e}")
+async def cmd_test(event: MessageCreated):
+    try:
+        messages = load_messages()
+        test_text = random.choice(messages)
+        await event.message.answer(f"🧪 Тест:\n\n{test_text}")
+        
+        # ✅ Используем универсальную функцию
+        chat_id = get_chat_id_from_event(event)
+        logger.debug(f"Тест отправлен в чат {chat_id}")
+    except Exception as e:
+        await event.message.answer(f"❌ Ошибка: {e}")
+        logger.error(f"Ошибка в /test: {e}")
 
     @dp.message_created(Command('add'))
     async def cmd_add(event: MessageCreated):
