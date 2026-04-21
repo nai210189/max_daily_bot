@@ -129,8 +129,8 @@ async def daily_scheduler() -> None:
 # ===== ОБРАБОТЧИКИ КОМАНД =====
 async def _ensure_chat_id(event: MessageCreated) -> None:
     """Сохраняет chat_id из события"""
-    # ✅ ПРАВИЛЬНЫЙ способ получить chat_id
-    chat_id = event.message.chat_id  # или event.chat_id
+    # ✅ chat_id доступен напрямую из event, не из event.message
+    chat_id = event.chat_id
     if state.chat_id != chat_id:
         state.chat_id = chat_id
         save_chat_id(state.chat_id)
@@ -159,7 +159,7 @@ async def cmd_test(event: MessageCreated):
         messages = load_messages()
         test_text = get_random_message(messages)
         await event.message.answer(f"🧪 Тест:\n\n{test_text}")
-        logger.debug(f"Тест отправлен в чат {event.message.chat_id}")
+        logger.debug(f"Тест отправлен в чат {event.chat_id}")
     except Exception as e:
         await event.message.answer(f"❌ Ошибка: {e}")
         logger.error(f"Ошибка в /test: {e}")
@@ -167,18 +167,22 @@ async def cmd_test(event: MessageCreated):
 
 @dp.message_created(Command('add'))
 async def cmd_add(event: MessageCreated):
-    # ✅ ПРАВИЛЬНЫЙ способ получить текст сообщения
-    # В последних версиях maxapi текст находится в event.message.text
+    # ✅ текст сообщения - в event.message.text
     text = getattr(event.message, 'text', '') or ''
     
-    match text.split(maxsplit=1):
-        case [_, new_message] if new_message.strip():
-            with MESSAGES_FILE.open('a', encoding='utf-8') as f:
-                f.write(f"\n{new_message.strip()}")
-            await event.message.answer(f"✅ Добавлено:\n\n{new_message.strip()}")
-            logger.info(f"Добавлено сообщение: {new_message.strip()[:50]}...")
-        case _:
-            await event.message.answer("❌ Использование: /add <текст сообщения>")
+    # Разбираем команду: "/add текст сообщения"
+    parts = text.split(maxsplit=1)
+    if len(parts) < 2 or not parts[1].strip():
+        await event.message.answer("❌ Использование: /add <текст сообщения>")
+        return
+    
+    new_message = parts[1].strip()
+    
+    with MESSAGES_FILE.open('a', encoding='utf-8') as f:
+        f.write(f"\n{new_message}")
+    
+    await event.message.answer(f"✅ Добавлено:\n\n{new_message}")
+    logger.info(f"Добавлено сообщение: {new_message[:50]}...")
 
 
 @dp.message_created(Command('list'))
