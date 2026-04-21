@@ -150,6 +150,10 @@ async def on_bot_started(event: BotStarted):
 
 @dp.message_created(Command('start'))
 async def cmd_start(event: MessageCreated):
+    # Отладочный вывод
+    await event.message.answer(f"Доступные атрибуты: {dir(event)}")
+    await event.message.answer(f"Доступные атрибуты message: {dir(event.message)}")
+    
     # Сохраняем chat_id (через исправленную _ensure_chat_id)
     await _ensure_chat_id(event)
     
