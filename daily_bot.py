@@ -2,6 +2,7 @@ import asyncio
 import logging
 import random
 import os
+import json
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Final
@@ -19,8 +20,9 @@ if not BOT_TOKEN:
 MY_TIMEZONE = ZoneInfo("Asia/Krasnoyarsk")
 MESSAGES_FILE: Final[Path] = Path("messages.txt")
 CHAT_ID_FILE: Final[Path] = Path("chat_id.txt")
-SEND_HOUR = 18
-SEND_MINUTE = 30
+SEND_HOUR = 9
+SEND_MINUTE = 0
+KEYWORDS_FILE: Final[Path] = Path("keywords.json")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -32,6 +34,90 @@ logger = logging.getLogger(__name__)
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
+# ===== РАБОТА С КЛЮЧЕВЫМИ СЛОВАМИ (JSON) =====
+def create_example_keywords_file() -> None:
+    """Создаёт пример файла keywords.json, если его нет"""
+    example_config = {
+        "responses": [
+            {
+                "keywords": ["привет", "здравствуй", "добрый день"],
+                "type": "text",
+                "content": "👋 Здравствуйте! Чем могу помочь?",
+                "description": "Приветствие"
+            },
+            {
+                "keywords": ["пока", "до свидания", "всего хорошего"],
+                "type": "text",
+                "content": "До свидания! Хорошего дня! 👋",
+                "description": "Прощание"
+            },
+            {
+                "keywords": ["спасибо", "благодарю", "спс"],
+                "type": "text",
+                "content": "Пожалуйста! Всегда рад помочь! 👍",
+                "description": "Благодарность"
+            },
+            {
+                "keywords": ["как дела", "как жизнь", "как ты"],
+                "type": "text",
+                "content": "Всё отлично! А у вас? 😊",
+                "description": "Вопрос о делах"
+            },
+            {
+                "keywords": ["помощь", "команды", "help", "что умеешь"],
+                "type": "text",
+                "content": "📋 Напишите /start для списка всех команд",
+                "description": "Справка"
+            },
+            {
+                "keywords": ["бот", "ты бот", "кто ты"],
+                "type": "text",
+                "content": "Я бот для ежедневной рассылки полезных сообщений! 🤖",
+                "description": "Представление бота"
+            }
+        ]
+    }
+    with open(KEYWORDS_FILE, 'w', encoding='utf-8') as f:
+        json.dump(example_config, f, ensure_ascii=False, indent=4)
+    logger.info(f"Создан пример файла {KEYWORDS_FILE}")
+
+
+def load_keywords_from_json() -> list[dict[str, Any]]:
+    """Загружает конфигурацию ключевых слов из JSON файла"""
+    if not KEYWORDS_FILE.exists():
+        create_example_keywords_file()
+    
+    try:
+        with open(KEYWORDS_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            return data.get("responses", [])
+    except json.JSONDecodeError as e:
+        logger.error(f"Ошибка парсинга {KEYWORDS_FILE}: {e}")
+        return []
+    except Exception as e:
+        logger.error(f"Ошибка загрузки {KEYWORDS_FILE}: {e}")
+        return []
+
+
+# Кэш для ключевых слов (чтобы не читать файл при каждом сообщении)
+_keywords_cache: list[dict[str, Any]] | None = None
+
+
+def get_keywords_config() -> list[dict[str, Any]]:
+    """Возвращает конфигурацию ключевых слов с кэшированием"""
+    global _keywords_cache
+    if _keywords_cache is None:
+        _keywords_cache = load_keywords_from_json()
+        logger.info(f"Загружено {len(_keywords_cache)} наборов ключевых слов")
+    return _keywords_cache
+
+
+def reload_keywords_config() -> list[dict[str, Any]]:
+    """Принудительно перезагружает конфигурацию из файла"""
+    global _keywords_cache
+    _keywords_cache = load_keywords_from_json()
+    logger.info(f"Ключевые слова перезагружены. Загружено {len(_keywords_cache)} наборов")
+    return _keywords_cache
 
 class BotState:
     __slots__ = ('chat_id',)
@@ -109,6 +195,21 @@ async def send_daily_message() -> None:
     except Exception as e:
         logger.error(f"Ошибка при отправке: {e}", exc_info=True)
 
+async def send_keyword_response(event: MessageCreated, response: dict[str, Any]) -> None:
+    """Отправляет ответ пользователю в зависимости от типа (текст)"""
+    response_type = response.get("type", "text")
+    content = response.get("content", "")
+    
+    try:
+        if response_type == "text":
+            await event.message.answer(content)
+            logger.debug(f"Отправлен текстовый ответ: {content[:50]}...")
+        else:
+            # Если тип не распознан, отправляем как текст
+            await event.message.answer(content)
+            logger.warning(f"Неизвестный тип ответа '{response_type}', отправлено как текст")
+    except Exception as e:
+        logger.error(f"Ошибка при отправке ответа: {e}")
 
 async def daily_scheduler() -> None:
     while True:
@@ -152,18 +253,21 @@ async def on_bot_started(event: BotStarted):
 
 @dp.message_created(Command('start'))
 async def cmd_start(event: MessageCreated):
-    # Сохраняем chat_id (через исправленную _ensure_chat_id)
     await _ensure_chat_id(event)
     
     await event.message.answer(
         "✅ Бот активирован!\n\n"
         "Теперь каждый день в 9:00 я буду присылать случайное сообщение.\n\n"
-        "📋 Команды:\n"
+        "📋 **Команды:**\n"
         "/test - тестовое сообщение\n"
         "/add <текст> - добавить сообщение\n"
         "/list - список сообщений\n"
         "/stats - статистика\n"
-        "/time - время на сервере"
+        "/time - время на сервере\n"
+        "/reload - перезагрузить ключевые слова\n\n"
+        "💬 **Ключевые слова:**\n"
+        "Я также отвечаю на слова: привет, пока, спасибо, как дела, помощь и другие!\n"
+        "Добавить новые можно в файле keywords.json"
     )
     logger.info(f"Бот активирован в чате {state.chat_id}")
 
@@ -232,12 +336,17 @@ async def cmd_stats(event: MessageCreated):
         
         size_kb = MESSAGES_FILE.stat().st_size / 1024
         
+        # Получаем количество ключевых слов
+        keywords_config = get_keywords_config()
+        keywords_count = len(keywords_config)
+        
         stats_text = (
             f"📊 **Статистика**\n\n"
-            f"• Сообщений: {total}\n"
+            f"• Сообщений в базе: {total}\n"
             f"• Средняя длина: {avg_len} симв.\n"
             f"• Размер файла: {size_kb:.1f} KB\n"
             f"• Время отправки: {SEND_HOUR:02d}:{SEND_MINUTE:02d}\n"
+            f"• Ключевых слов (наборов): {keywords_count}\n"
             f"• Чат: {'активирован' if state.chat_id else 'не активирован'}"
         )
         
@@ -255,10 +364,59 @@ async def cmd_time(event: MessageCreated):
 
 
 @dp.message_created()
+async def handle_keywords(event: MessageCreated):
+    """
+    Отвечает на сообщения по ключевым словам из JSON файла.
+    Этот обработчик срабатывает для любых сообщений (кроме команд).
+    """
+    # Получаем текст сообщения
+    text = getattr(event.message, 'text', '') or ''
+    text_lower = text.lower().strip()
+    
+    # Игнорируем команды (начинаются с /)
+    if text_lower.startswith('/'):
+        return
+    
+    # Игнорируем слишком длинные сообщения (вряд ли это ключевое слово)
+    if len(text_lower) > 100:
+        return
+    
+    # Загружаем конфигурацию
+    responses = get_keywords_config()
+    
+    # Ищем подходящий ответ
+    for response in responses:
+        keywords = response.get("keywords", [])
+        
+        # Приводим ключевые слова к нижнему регистру для сравнения
+        keywords_lower = [kw.lower() for kw in keywords]
+        
+        # Проверяем, есть ли хотя бы одно ключевое слово в сообщении
+        for keyword in keywords_lower:
+            if keyword in text_lower:
+                logger.info(f"Сработало ключевое слово '{keyword}' в чате {event.message.chat_id}")
+                await send_keyword_response(event, response)
+                return
+
+@dp.message_created()
 async def handle_unknown(event: MessageCreated):
     text = getattr(event.message, 'text', '') or ''
     if text and text.startswith('/') and text not in ['/start', '/test', '/add', '/list', '/stats', '/time']:
         await event.message.answer("❓ Неизвестная команда. Напишите /start для списка команд.")
+
+@dp.message_created(Command('reload'))
+async def cmd_reload(event: MessageCreated):
+    """Перезагружает ключевые слова из JSON файла"""
+    # Проверяем, что команду дал владелец бота
+    if state.chat_id is not None and event.message.chat_id != state.chat_id:
+        await event.message.answer("❌ У вас нет прав для этой команды.")
+        return
+    
+    try:
+        reload_keywords_config()
+        await event.message.answer("✅ Ключевые слова успешно перезагружены из keywords.json!")
+    except Exception as e:
+        await event.message.answer(f"❌ Ошибка при перезагрузке: {e}")
 
 
 # ===== ЗАПУСК =====
