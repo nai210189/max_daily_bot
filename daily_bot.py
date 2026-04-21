@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import random
+import os
 from datetime import datetime, time
 from pathlib import Path
 
@@ -12,9 +13,13 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # ===== КОНФИГУРАЦИЯ =====
-BOT_TOKEN = "f9LHodD0cOKO2Y8nxlqx67FOkppCR2lTMkH3d5erq-TRgY08VyEkLY-aqiI79difaBQowe8fxq9yOzhhNtOp"  # Токен от Master Bot
+# Токен берём из переменных окружения (безопасно для хостинга)
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+if not BOT_TOKEN:
+    raise ValueError("BOT_TOKEN не найден! Установите переменную окружения BOT_TOKEN")
+
 MESSAGES_FILE = "messages.txt"  # Файл с сообщениями
-CHAT_ID = None  # ID чата, куда отправлять. Если None - бот будет ждать команду /start
+CHAT_ID = None  # ID чата, куда отправлять (запоминается после /start)
 
 # Создаём бота и диспетчера
 bot = Bot(token=BOT_TOKEN)
@@ -111,6 +116,12 @@ async def cmd_start(event: MessageCreated):
     
     await event.message.answer(
         "✅ Бот активирован!\n\n"
+        "Теперь каждый день в 9:00 я буду присылать случайное сообщение из моей базы.\n\n"
+        "Команды:\n"
+        "/test - отправить тестовое сообщение прямо сейчас\n"
+        "/add <текст> - добавить новое сообщение в базу\n"
+        "/list - показать все сообщения в базе\n"
+        "/stats - показать статистику"
     )
 
 
@@ -163,16 +174,7 @@ async def cmd_list(event: MessageCreated):
             display_msg = msg[:50] + "..." if len(msg) > 50 else msg
             list_text += f"{i}. {display_msg}\n"
         
-        # Если сообщение слишком длинное для одного ответа
-        if len(list_text) > 4000:
-            # Отправляем файлом
-            with open(MESSAGES_FILE, 'r', encoding='utf-8') as f:
-                await event.message.answer_document(
-                    document=f,
-                    caption="📄 Полный список сообщений"
-                )
-        else:
-            await event.message.answer(list_text)
+        await event.message.answer(list_text)
             
     except Exception as e:
         await event.message.answer(f"❌ Ошибка: {e}")
@@ -202,11 +204,19 @@ async def cmd_stats(event: MessageCreated):
         await event.message.answer(f"❌ Ошибка: {e}")
 
 
+@dp.message_created(Command('time'))
+async def cmd_time(event: MessageCreated):
+    """Показывает текущее время на сервере"""
+    now = datetime.now()
+    await event.message.answer(f"🕐 Текущее время на сервере: {now.strftime('%H:%M:%S %d.%m.%Y')}")
+
+
 # ===== ЗАПУСК БОТА =====
 async def main():
     global CHAT_ID
     
     logger.info("Запуск ежедневного бота...")
+    logger.info(f"BOT_TOKEN: {'Установлен' if BOT_TOKEN else 'ОТСУТСТВУЕТ'}")
     
     # Пытаемся восстановить сохранённый chat_id
     if Path("chat_id.txt").exists():
