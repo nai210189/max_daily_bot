@@ -18,7 +18,7 @@ if not BOT_TOKEN:
 
 MY_TIMEZONE = ZoneInfo("Asia/Krasnoyarsk")
 SEND_HOUR = 18
-SEND_MINUTE = 7
+SEND_MINUTE = 15
 
 MESSAGES_FILE: Final[Path] = Path("messages.txt")
 CHAT_ID_FILE: Final[Path] = Path("chat_id.txt")
