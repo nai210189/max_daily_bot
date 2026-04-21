@@ -83,7 +83,7 @@ def create_example_keywords_file() -> None:
     logger.info(f"Создан пример файла {KEYWORDS_FILE}")
 
 
-def load_keywords_from_json() -> list[dict[str, Any]]:
+def load_keywords_from_json() -> list[dict[str, any]]:
     """Загружает конфигурацию ключевых слов из JSON файла"""
     if not KEYWORDS_FILE.exists():
         create_example_keywords_file()
@@ -101,10 +101,10 @@ def load_keywords_from_json() -> list[dict[str, Any]]:
 
 
 # Кэш для ключевых слов (чтобы не читать файл при каждом сообщении)
-_keywords_cache: list[dict[str, Any]] | None = None
+_keywords_cache: list[dict[str, any]] | None = None
 
 
-def get_keywords_config() -> list[dict[str, Any]]:
+def get_keywords_config() -> list[dict[str, any]]:
     """Возвращает конфигурацию ключевых слов с кэшированием"""
     global _keywords_cache
     if _keywords_cache is None:
@@ -113,7 +113,7 @@ def get_keywords_config() -> list[dict[str, Any]]:
     return _keywords_cache
 
 
-def reload_keywords_config() -> list[dict[str, Any]]:
+def reload_keywords_config() -> list[dict[str, any]]:
     """Принудительно перезагружает конфигурацию из файла"""
     global _keywords_cache
     _keywords_cache = load_keywords_from_json()
@@ -196,7 +196,7 @@ async def send_daily_message() -> None:
     except Exception as e:
         logger.error(f"Ошибка при отправке: {e}", exc_info=True)
 
-async def send_keyword_response(event: MessageCreated, response: dict[str, Any]) -> None:
+async def send_keyword_response(event: MessageCreated, response: dict[str, any]) -> None:
     """
     Отправляет ответ пользователю (текст или картинку).
     """
