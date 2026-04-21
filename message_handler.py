@@ -59,7 +59,7 @@ def register_handlers(dp):
         logger.info(f"Бот активирован в чате {state.chat_id}")
 
     @dp.message_created(Command('test'))
-async def cmd_test(event: MessageCreated):
+    async def cmd_test(event: MessageCreated):
     try:
         messages = load_messages()
         test_text = random.choice(messages)
