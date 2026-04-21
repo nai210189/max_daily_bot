@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Final
 from maxapi.types import BotStarted
+from zoneinfo import ZoneInfo
 
 from maxapi import Bot, Dispatcher
 from maxapi.types import MessageCreated, Command
@@ -14,6 +15,8 @@ from maxapi.types import MessageCreated, Command
 BOT_TOKEN: Final[str | None] = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN не найден! Установите переменную окружения BOT_TOKEN")
+
+TIMEZONE = ZoneInfo("Asia/Krasnoyarsk")
 
 MESSAGES_FILE: Final[Path] = Path("messages.txt")
 CHAT_ID_FILE: Final[Path] = Path("chat_id.txt")
@@ -85,7 +88,7 @@ def load_saved_chat_id() -> int | None:
 
 # ===== ПЛАНИРОВЩИК =====
 def get_next_run_time() -> datetime:
-    now = datetime.now()
+    now = datetime.now(TIMEZONE)
     target = now.replace(hour=SEND_HOUR, minute=SEND_MINUTE, second=0, microsecond=0)
     if now >= target:
         target += timedelta(days=1)
@@ -110,13 +113,14 @@ async def send_daily_message() -> None:
 async def daily_scheduler() -> None:
     while True:
         target = get_next_run_time()
-        wait_seconds = (target - datetime.now()).total_seconds()
+        now_utc = datetime.now()
+        wait_seconds = (target.astimezone() - now_utc).total_seconds()
         
         wait_delta = timedelta(seconds=wait_seconds)
         hours = wait_delta.seconds // 3600
         minutes = (wait_delta.seconds % 3600) // 60
         
-        logger.info(f"Следующая отправка через {hours}ч {minutes}мин (в {target.strftime('%H:%M %d.%m.%Y')})")
+        logger.info(f"Следующая отправка через {hours}ч {minutes}мин (в {target.strftime('%H:%M %d.%m.%Y')} по местному времени)")
         
         try:
             await asyncio.sleep(wait_seconds)
