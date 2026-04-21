@@ -5,6 +5,7 @@ import os
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Final
+from maxapi.types import BotStarted
 
 from maxapi import Bot, Dispatcher
 from maxapi.types import MessageCreated, Command
@@ -135,6 +136,17 @@ async def _ensure_chat_id(event: MessageCreated) -> None:
         state.chat_id = chat_id
         save_chat_id(state.chat_id)
 
+@dp.bot_started()
+async def on_bot_started(event: BotStarted):
+    """Срабатывает, когда пользователь нажимает 'Начать' в диалоге с ботом"""
+    chat_id = event.chat_id
+    state.chat_id = chat_id
+    save_chat_id(chat_id)
+    await event.bot.send_message(
+        chat_id=chat_id,
+        text="✅ Бот активирован! Теперь каждый день в 9:00 я буду присылать сообщение."
+    )
+    logger.info(f"Бот активирован пользователем {chat_id}")
 
 @dp.message_created(Command('start'))
 async def cmd_start(event: MessageCreated):
