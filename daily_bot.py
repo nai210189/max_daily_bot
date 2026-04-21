@@ -17,11 +17,10 @@ if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN не найден! Установите переменную окружения BOT_TOKEN")
 
 MY_TIMEZONE = ZoneInfo("Asia/Krasnoyarsk")
-SEND_HOUR = 18
-SEND_MINUTE = 15
-
 MESSAGES_FILE: Final[Path] = Path("messages.txt")
 CHAT_ID_FILE: Final[Path] = Path("chat_id.txt")
+SEND_HOUR = 18
+SEND_MINUTE = 30
 
 logging.basicConfig(
     level=logging.INFO,
