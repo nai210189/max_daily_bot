@@ -5,7 +5,36 @@ from config import CHAT_ID_FILE, MESSAGES_FILE
 
 logger = logging.getLogger(__name__)
 
-
+# ===== ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ ПОЛУЧЕНИЯ CHAT_ID =====
+def get_chat_id_from_event(event) -> int | None:
+    """
+    Универсальное получение chat_id из события.
+    Работает с разными версиями библиотеки maxapi.
+    
+    Пробует последовательно:
+    1. event.chat_id
+    2. event.message.chat_id  
+    3. event.message.chat.id
+    """
+    # Вариант 1: chat_id напрямую в событии
+    if hasattr(event, 'chat_id'):
+        return event.chat_id
+    
+    # Вариант 2: chat_id в event.message
+    if hasattr(event, 'message'):
+        if hasattr(event.message, 'chat_id'):
+            return event.message.chat_id
+        if hasattr(event.message, 'chat') and hasattr(event.message.chat, 'id'):
+            return event.message.chat.id
+    
+    # Если ничего не нашли, логируем ошибку для отладки
+    logger = logging.getLogger(__name__)
+    logger.error(f"Не удалось получить chat_id из события. Доступные атрибуты: {dir(event)}")
+    if hasattr(event, 'message'):
+        logger.error(f"Атрибуты event.message: {dir(event.message)}")
+    
+    return None
+    
 # ===== РАБОТА С CHAT_ID =====
 def save_chat_id(chat_id: int) -> None:
     """Сохраняет chat_id в файл"""
