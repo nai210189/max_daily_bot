@@ -2,6 +2,7 @@ import logging
 import random
 from datetime import datetime
 
+from maxapi import F
 from maxapi.types import MessageCreated, Command, BotStarted
 
 from config import MY_TIMEZONE, MESSAGES_FILE, SEND_HOUR, SEND_MINUTE
@@ -142,9 +143,9 @@ def register_handlers(dp):
         except Exception as e:
             await event.message.answer(f"❌ Ошибка при перезагрузке: {e}")
 
-    @dp.message_created()
+    @dp.message_created(F.message.body.text)
     async def handle_keywords(event: MessageCreated):
-        text = getattr(event.message, 'text', '') or ''
+        text = event.message.body.get('text', '') if event.message.body else ''
         text_lower = text.lower().strip()
         
         if text_lower.startswith('/') or len(text_lower) > 100:
