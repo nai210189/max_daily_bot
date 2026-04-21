@@ -16,12 +16,12 @@ BOT_TOKEN: Final[str | None] = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN не найден! Установите переменную окружения BOT_TOKEN")
 
-TIMEZONE = ZoneInfo("Asia/Krasnoyarsk")
+MY_TIMEZONE = ZoneInfo("Asia/Krasnoyarsk")
+SEND_HOUR = 18
+SEND_MINUTE = 7
 
 MESSAGES_FILE: Final[Path] = Path("messages.txt")
 CHAT_ID_FILE: Final[Path] = Path("chat_id.txt")
-SEND_HOUR: Final[int] = 9
-SEND_MINUTE: Final[int] = 0
 
 logging.basicConfig(
     level=logging.INFO,
@@ -88,7 +88,8 @@ def load_saved_chat_id() -> int | None:
 
 # ===== ПЛАНИРОВЩИК =====
 def get_next_run_time() -> datetime:
-    now = datetime.now(TIMEZONE)
+    """Возвращает следующее время отправки (9:00 по вашему часовому поясу)"""
+    now = datetime.now(MY_TIMEZONE)
     target = now.replace(hour=SEND_HOUR, minute=SEND_MINUTE, second=0, microsecond=0)
     if now >= target:
         target += timedelta(days=1)
@@ -249,8 +250,9 @@ async def cmd_stats(event: MessageCreated):
 
 @dp.message_created(Command('time'))
 async def cmd_time(event: MessageCreated):
-    now = datetime.now()
-    await event.message.answer(f"🕐 {now.strftime('%H:%M:%S %d.%m.%Y')}")
+    """Показывает текущее время в вашем часовом поясе"""
+    now = datetime.now(MY_TIMEZONE)
+    await event.message.answer(f"🕐 {now.strftime('%H:%M:%S %d.%m.%Y')} (по вашему времени)")
 
 
 @dp.message_created()
