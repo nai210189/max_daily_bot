@@ -1,3 +1,4 @@
+import aiohttp
 import asyncio
 import logging
 import random
@@ -196,20 +197,51 @@ async def send_daily_message() -> None:
         logger.error(f"Ошибка при отправке: {e}", exc_info=True)
 
 async def send_keyword_response(event: MessageCreated, response: dict[str, Any]) -> None:
-    """Отправляет ответ пользователю в зависимости от типа (текст)"""
+    """
+    Отправляет ответ пользователю (текст или картинку).
+    """
     response_type = response.get("type", "text")
     content = response.get("content", "")
+    caption = response.get("caption", "")
     
     try:
         if response_type == "text":
             await event.message.answer(content)
             logger.debug(f"Отправлен текстовый ответ: {content[:50]}...")
+            
+        elif response_type == "image":
+            # Проверяем, является ли content URL или локальным путём
+            if content.startswith(('http://', 'https://')):
+                # Отправка картинки по URL [citation:1][citation:8]
+                await event.message.answer_photo(
+                    photo=content,
+                    caption=caption
+                )
+                logger.info(f"Отправлена картинка по URL: {content}")
+            else:
+                # Отправка локальной картинки с диска [citation:5][citation:6]
+                image_path = Path(content)
+                if not image_path.exists():
+                    logger.warning(f"Файл картинки не найден: {image_path}")
+                    await event.message.answer(caption or "❌ Изображение временно недоступно")
+                    return
+                
+                # Отправляем файл
+                with open(image_path, 'rb') as img_file:
+                    await event.message.answer_photo(
+                        photo=img_file,
+                        caption=caption
+                    )
+                logger.info(f"Отправлена локальная картинка: {image_path}")
         else:
-            # Если тип не распознан, отправляем как текст
+            # Если тип неизвестен, отправляем как текст
             await event.message.answer(content)
-            logger.warning(f"Неизвестный тип ответа '{response_type}', отправлено как текст")
+            logger.warning(f"Неизвестный тип ответа '{response_type}'")
+            
     except Exception as e:
         logger.error(f"Ошибка при отправке ответа: {e}")
+        # Отправляем fallback-сообщение
+        await event.message.answer(caption or content or "❌ Произошла ошибка при отправке ответа")
 
 async def daily_scheduler() -> None:
     while True:
