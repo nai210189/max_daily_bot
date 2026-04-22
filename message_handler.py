@@ -2,14 +2,13 @@ import logging
 import random
 from datetime import datetime
 
-from maxapi import F
-from maxapi.types import MessageCreated, Command, BotStarted, CallbackQuery
+from maxapi.types import MessageCreated, Command, BotStarted
 
 from config import MY_TIMEZONE, MESSAGES_FILE, SEND_HOUR, SEND_MINUTE
 from bot_state import state
-from utils import save_chat_id, load_messages, get_chat_id_from_event
+from utils import save_chat_id, load_messages
 from keywords_handler import get_keywords_config, reload_keywords_config, send_keyword_response
-from keyboards import get_main_keyboard, get_cancel_keyboard, get_action_keyboard, get_confirmation_keyboard
+from keyboards import get_main_keyboard, get_cancel_keyboard
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +41,7 @@ def register_handlers(dp):
         keyboard = get_main_keyboard()
         await event.bot.send_message(
             chat_id=chat_id,
-            text="✅ Бот активирован! Теперь каждый день в 9:00 я буду присылать сообщение.\n\nИспользуйте кнопки для управления:",
+            text="✅ Бот активирован! Теперь каждый день в 12:30 я буду присылать сообщение.\n\nИспользуйте кнопки для управления:",
             reply_markup=keyboard
         )
         logger.info(f"Бот активирован через BotStarted в чате {chat_id}")
@@ -68,12 +67,26 @@ def register_handlers(dp):
         )
         logger.info(f"Бот активирован в чате {state.chat_id}")
 
-    # Обработчик текстовых кнопок
+    # Обработчик текстовых кнопок и команд
     @dp.message_created()
     async def handle_button_presses(event: MessageCreated):
         text = event.message.body.text if event.message.body else ''
         
-        if text == "📝 Тест":
+        # Обработка команд (для обратной совместимости)
+        if text == '/test':
+            await cmd_test(event)
+        elif text == '/add':
+            await cmd_add_prompt(event)
+        elif text == '/list':
+            await cmd_list(event)
+        elif text == '/stats':
+            await cmd_stats(event)
+        elif text == '/time':
+            await cmd_time(event)
+        elif text == '/reload':
+            await cmd_reload(event)
+        # Обработка кнопок
+        elif text == "📝 Тест":
             await cmd_test(event)
         elif text == "➕ Добавить":
             await cmd_add_prompt(event)
@@ -90,48 +103,18 @@ def register_handlers(dp):
             keyboard = get_main_keyboard()
             await event.message.answer("❌ Операция отменена", reply_markup=keyboard)
 
-    # Обработчики инлайн-кнопок
-    @dp.callback_query()
-    async def handle_callbacks(event: CallbackQuery):
-        data = event.callback_query.data
-        chat_id = event.callback_query.message.chat.id
-        
-        if data == "action_test":
-            await cmd_test_from_callback(event)
-        elif data == "action_add":
-            await cmd_add_prompt_from_callback(event)
-        elif data == "action_list":
-            await cmd_list_from_callback(event)
-        elif data == "action_stats":
-            await cmd_stats_from_callback(event)
-        elif data == "action_time":
-            await cmd_time_from_callback(event)
-        elif data == "action_reload":
-            await cmd_reload_from_callback(event)
-        elif data == "confirm_yes":
-            # Здесь можно добавить логику подтверждения
-            await event.callback_query.answer("✅ Действие подтверждено")
-        elif data == "confirm_no":
-            await event.callback_query.answer("❌ Действие отменено")
-
     async def cmd_test(event: MessageCreated):
         try:
             messages = load_messages()
+            if not messages:
+                await event.message.answer("❌ Нет сообщений в базе. Добавьте хотя бы одно сообщение командой /add")
+                return
             test_text = random.choice(messages)
             await event.message.answer(f"🧪 **Тест:**\n\n{test_text}")
             logger.debug(f"Тест отправлен в чат {event.chat_id}")
         except Exception as e:
             await event.message.answer(f"❌ Ошибка: {e}")
             logger.error(f"Ошибка в /test: {e}")
-
-    async def cmd_test_from_callback(event: CallbackQuery):
-        try:
-            messages = load_messages()
-            test_text = random.choice(messages)
-            await event.callback_query.message.answer(f"🧪 **Тест:**\n\n{test_text}")
-            await event.callback_query.answer("✅ Тест выполнен")
-        except Exception as e:
-            await event.callback_query.answer(f"❌ Ошибка: {e}")
 
     async def cmd_add_prompt(event: MessageCreated):
         """Запрашивает текст для добавления"""
@@ -143,16 +126,6 @@ def register_handlers(dp):
             reply_markup=keyboard
         )
 
-    async def cmd_add_prompt_from_callback(event: CallbackQuery):
-        user_states[event.callback_query.message.chat.id] = "waiting_for_message"
-        keyboard = get_cancel_keyboard()
-        await event.callback_query.message.answer(
-            "✏️ Введите текст сообщения для добавления:\n\n"
-            "(или нажмите ❌ Отмена)",
-            reply_markup=keyboard
-        )
-        await event.callback_query.answer()
-
     async def cmd_add(event: MessageCreated, text: str):
         """Добавляет сообщение в базу"""
         new_message = text.strip()
@@ -160,8 +133,9 @@ def register_handlers(dp):
             await event.message.answer("❌ Сообщение не может быть пустым")
             return
         
+        # Добавляем сообщение в файл
         with MESSAGES_FILE.open('a', encoding='utf-8') as f:
-            f.write(f"\n{new_message}")
+            f.write(f"{new_message}\n")
         
         keyboard = get_main_keyboard()
         await event.message.answer(
@@ -177,44 +151,30 @@ def register_handlers(dp):
         try:
             messages = load_messages()
             if not messages:
-                await event.message.answer("📭 База пуста.")
+                await event.message.answer("📭 База пуста. Добавьте сообщения через /add")
                 return
             
-            items = [f"{i}. {msg[:50] + '...' if len(msg) > 50 else msg}" 
-                     for i, msg in enumerate(messages, 1)]
-            list_text = f"📋 **Сообщения ({len(messages)}):**\n\n" + '\n'.join(items)
-            
-            if len(list_text) > 4000:
-                await event.message.answer(f"📋 Всего сообщений: {len(messages)} (слишком много для списка)")
-            else:
-                await event.message.answer(list_text)
-        except Exception as e:
-            await event.message.answer(f"❌ Ошибка: {e}")
-
-    async def cmd_list_from_callback(event: CallbackQuery):
-        try:
-            messages = load_messages()
-            if not messages:
-                await event.callback_query.message.answer("📭 База пуста.")
+            # Показываем первые 10 сообщений, чтобы не было слишком длинного сообщения
+            if len(messages) > 10:
+                items = [f"{i}. {msg[:50] + '...' if len(msg) > 50 else msg}" 
+                         for i, msg in enumerate(messages[:10], 1)]
+                list_text = f"📋 **Сообщения (первые 10 из {len(messages)}):**\n\n" + '\n'.join(items)
+                list_text += f"\n\n📌 Всего сообщений: {len(messages)}"
             else:
                 items = [f"{i}. {msg[:50] + '...' if len(msg) > 50 else msg}" 
                          for i, msg in enumerate(messages, 1)]
                 list_text = f"📋 **Сообщения ({len(messages)}):**\n\n" + '\n'.join(items)
-                
-                if len(list_text) > 4000:
-                    await event.callback_query.message.answer(f"📋 Всего сообщений: {len(messages)} (слишком много для списка)")
-                else:
-                    await event.callback_query.message.answer(list_text)
-            await event.callback_query.answer()
+            
+            await event.message.answer(list_text)
         except Exception as e:
-            await event.callback_query.answer(f"❌ Ошибка: {e}")
+            await event.message.answer(f"❌ Ошибка: {e}")
 
     async def cmd_stats(event: MessageCreated):
         try:
             messages = load_messages()
             total = len(messages)
             avg_len = sum(len(m) for m in messages) // total if total else 0
-            size_kb = MESSAGES_FILE.stat().st_size / 1024
+            size_kb = MESSAGES_FILE.stat().st_size / 1024 if MESSAGES_FILE.exists() else 0
             keywords_count = len(get_keywords_config())
             
             stats_text = (
@@ -230,36 +190,9 @@ def register_handlers(dp):
         except Exception as e:
             await event.message.answer(f"❌ Ошибка: {e}")
 
-    async def cmd_stats_from_callback(event: CallbackQuery):
-        try:
-            messages = load_messages()
-            total = len(messages)
-            avg_len = sum(len(m) for m in messages) // total if total else 0
-            size_kb = MESSAGES_FILE.stat().st_size / 1024
-            keywords_count = len(get_keywords_config())
-            
-            stats_text = (
-                f"📊 **Статистика**\n\n"
-                f"• Сообщений в базе: {total}\n"
-                f"• Средняя длина: {avg_len} симв.\n"
-                f"• Размер файла: {size_kb:.1f} KB\n"
-                f"• Время отправки: {SEND_HOUR:02d}:{SEND_MINUTE:02d}\n"
-                f"• Ключевых слов (наборов): {keywords_count}\n"
-                f"• Чат: {'активирован' if state.chat_id else 'не активирован'}"
-            )
-            await event.callback_query.message.answer(stats_text)
-            await event.callback_query.answer()
-        except Exception as e:
-            await event.callback_query.answer(f"❌ Ошибка: {e}")
-
     async def cmd_time(event: MessageCreated):
         now = datetime.now(MY_TIMEZONE)
         await event.message.answer(f"🕐 {now.strftime('%H:%M:%S %d.%m.%Y')}")
-
-    async def cmd_time_from_callback(event: CallbackQuery):
-        now = datetime.now(MY_TIMEZONE)
-        await event.callback_query.message.answer(f"🕐 {now.strftime('%H:%M:%S %d.%m.%Y')}")
-        await event.callback_query.answer()
 
     async def cmd_reload(event: MessageCreated):
         """Перезагружает ключевые слова из JSON файла"""
@@ -275,15 +208,6 @@ def register_handlers(dp):
             await event.message.answer("✅ Ключевые слова успешно перезагружены из keywords.json!", reply_markup=keyboard)
         except Exception as e:
             await event.message.answer(f"❌ Ошибка при перезагрузке: {e}")
-
-    async def cmd_reload_from_callback(event: CallbackQuery):
-        try:
-            reload_keywords_config()
-            keyboard = get_main_keyboard()
-            await event.callback_query.message.answer("✅ Ключевые слова успешно перезагружены из keywords.json!", reply_markup=keyboard)
-            await event.callback_query.answer("✅ Перезагружено")
-        except Exception as e:
-            await event.callback_query.answer(f"❌ Ошибка: {e}")
 
     # Обработчик для добавления сообщения (ожидание ввода)
     @dp.message_created()
@@ -307,7 +231,8 @@ def register_handlers(dp):
         text_lower = text.lower().strip()
         
         # Игнорируем команды и кнопки
-        if text_lower.startswith('/') or text in ["📝 Тест", "➕ Добавить", "📋 Список", "📊 Статистика", "🕐 Время", "🔄 Перезагрузить", "❌ Отмена"]:
+        buttons = ["📝 тест", "➕ добавить", "📋 список", "📊 статистика", "🕐 время", "🔄 перезагрузить", "❌ отмена"]
+        if text_lower.startswith('/') or text_lower in buttons or text in buttons:
             return
         
         # Игнорируем слишком длинные сообщения
@@ -332,7 +257,8 @@ def register_handlers(dp):
         text = event.message.body.text if event.message.body else ''
         known_buttons = ["📝 Тест", "➕ Добавить", "📋 Список", "📊 Статистика", "🕐 Время", "🔄 Перезагрузить", "❌ Отмена"]
         
-        if text and text.startswith('/') and text not in ['/start']:
+        # Если это неизвестная команда, но не кнопка
+        if text and text.startswith('/') and text not in ['/start', '/test', '/add', '/list', '/stats', '/time', '/reload']:
             keyboard = get_main_keyboard()
             await event.message.answer(
                 "❓ Неизвестная команда.\n\nИспользуйте кнопки для управления ботом:",
