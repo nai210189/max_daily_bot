@@ -1,153 +1,135 @@
-from keyboards import (
-    get_main_reply_keyboard, 
-    get_remove_keyboard, 
-    get_action_for_button,
-    get_admin_reply_keyboard,
-    get_simple_reply_keyboard
-)
 import logging
 import random
 from datetime import datetime
 
-from maxapi import F
+from maxapi import Bot, Dispatcher
 from maxapi.types import MessageCreated, Command, BotStarted
 
 from config import MY_TIMEZONE, MESSAGES_FILE, SEND_HOUR, SEND_MINUTE
 from bot_state import state
-from utils import save_chat_id, load_messages, get_chat_id_from_event
+from utils import save_chat_id, load_messages, add_message, clear_messages, get_chat_id_from_event, load_saved_chat_id
 from keywords_handler import get_keywords_config, reload_keywords_config, send_keyword_response
+from keyboards import (
+    get_main_reply_keyboard, 
+    get_remove_keyboard, 
+    get_simple_reply_keyboard,
+    get_action_for_button
+)
+from scheduler import get_next_run_time
 
 logger = logging.getLogger(__name__)
 
 
-async def ensure_chat_id(event: MessageCreated) -> None:
-    """Сохраняет chat_id из события"""
-    # ✅ Правильный способ для вашей версии
-    if hasattr(event, 'chat_id'):
-        chat_id = event.chat_id
-    else:
-        logger.warning("Не удалось получить chat_id из event.chat_id")
-        return
+def register_handlers(dp: Dispatcher, bot: Bot):
+    """Регистрирует все обработчики команд"""
     
-    if state.chat_id != chat_id:
-        state.chat_id = chat_id
-        save_chat_id(state.chat_id)
-        logger.info(f"Сохранён chat_id: {state.chat_id}")
-
-
-def register_handlers(dp):
-    
-    @dp.message_created(Command('menu'))
-    async def cmd_menu(event: MessageCreated):
-        """
-        Показывает главное меню (reply-клавиатуру)
-        """
-        # Получаем chat_id
-        chat_id = event.chat_id if hasattr(event, 'chat_id') else None
-        
-        # Проверяем, администратор ли пользователь
-        is_admin = (state.chat_id == chat_id)
-        
-        if is_admin:
-            keyboard = get_admin_reply_keyboard()
-            text = "🔧 **Панель управления ботом**\n\nНажмите на кнопку для выполнения действия:"
-        else:
-            keyboard = get_main_reply_keyboard()
-            text = "🔧 **Быстрое меню**\n\nНажмите на кнопку для выполнения действия:"
-        
-        # ✅ Используем bot.send_message вместо message.answer
-        await event.bot.send_message(
-            chat_id=chat_id,
-            text=text,
-            reply_markup=keyboard,
-            parse_mode="markdown"
-        )
-        
-        logger.info(f"Меню показано в чате {chat_id}")
-    
-    
-    @dp.message_created(Command('hide_menu'))
-    async def cmd_hide_menu(event: MessageCreated):
-        """
-        Скрывает reply-клавиатуру
-        """
-        chat_id = event.chat_id if hasattr(event, 'chat_id') else None
-        keyboard = get_remove_keyboard()
-        
-        # ✅ Используем bot.send_message
-        await event.bot.send_message(
-            chat_id=chat_id,
-            text="✅ Клавиатура скрыта. Отправьте /menu чтобы показать снова.",
-            reply_markup=keyboard
-        )
-        
-        logger.info(f"Клавиатура скрыта в чате {chat_id}")
+    # ===== ВСТРОЕННЫЕ СОБЫТИЯ =====
     
     @dp.bot_started()
     async def on_bot_started(event: BotStarted):
+        """Пользователь нажал 'Начать'"""
         chat_id = event.chat_id
         state.chat_id = chat_id
         save_chat_id(chat_id)
-        await event.bot.send_message(
+        await bot.send_message(
             chat_id=chat_id,
-            text="✅ Бот активирован! Теперь каждый день в 9:00 я буду присылать сообщение."
+            text="✅ Бот активирован! Теперь каждый день в 9:00 я буду присылать сообщение.\n\nОтправьте /menu для управления."
         )
-        logger.info(f"Бот активирован через BotStarted в чате {chat_id}")
-
+        logger.info(f"Бот активирован в чате {chat_id}")
+    
+    # ===== ОСНОВНЫЕ КОМАНДЫ =====
+    
     @dp.message_created(Command('start'))
     async def cmd_start(event: MessageCreated):
-        await ensure_chat_id(event)
-        await event.message.answer(
-            "✅ Бот активирован!\n\n"
-            "Теперь каждый день в 9:00 я буду присылать случайное сообщение.\n\n"
-            "📋 **Команды:**\n"
-            "/test - тестовое сообщение\n"
-            "/add <текст> - добавить сообщение\n"
-            "/list - список сообщений\n"
-            "/stats - статистика\n"
-            "/time - время на сервере\n"
-            "/reload - перезагрузить ключевые слова\n\n"
-            "💬 **Ключевые слова:**\n"
-            "Я также отвечаю на слова: привет, пока, спасибо, как дела, помощь и другие!"
+        chat_id = get_chat_id_from_event(event)
+        if chat_id:
+            state.chat_id = chat_id
+            save_chat_id(chat_id)
+        
+        await bot.send_message(
+            chat_id=chat_id,
+            text="✅ Бот активирован!\n\n"
+                 "Теперь каждый день в 9:00 я буду присылать случайное сообщение.\n\n"
+                 "📋 **Команды:**\n"
+                 "/test - тестовое сообщение\n"
+                 "/add <текст> - добавить сообщение\n"
+                 "/list - список сообщений\n"
+                 "/stats - статистика\n"
+                 "/time - время на сервере\n"
+                 "/reload - перезагрузить ключевые слова\n"
+                 "/menu - показать меню\n\n"
+                 "💬 Я также отвечаю на слова: привет, пока, спасибо, как дела!",
+            parse_mode="markdown"
         )
-        logger.info(f"Бот активирован в чате {state.chat_id}")
-
+        logger.info(f"Бот активирован в чате {chat_id}")
+    
+    @dp.message_created(Command('menu'))
+    async def cmd_menu(event: MessageCreated):
+        """Показывает reply-клавиатуру"""
+        chat_id = get_chat_id_from_event(event)
+        if not chat_id:
+            return
+        
+        keyboard = get_main_reply_keyboard()
+        await bot.send_message(
+            chat_id=chat_id,
+            text="🔧 **Панель управления**\n\nНажмите на кнопку:",
+            reply_markup=keyboard,
+            parse_mode="markdown"
+        )
+        logger.info(f"Меню показано в чате {chat_id}")
+    
+    @dp.message_created(Command('hide_menu'))
+    async def cmd_hide_menu(event: MessageCreated):
+        """Скрывает клавиатуру"""
+        chat_id = get_chat_id_from_event(event)
+        if not chat_id:
+            return
+        
+        await bot.send_message(
+            chat_id=chat_id,
+            text="✅ Клавиатура скрыта. Отправьте /menu чтобы показать снова.",
+            reply_markup=get_remove_keyboard()
+        )
+        logger.info(f"Клавиатура скрыта в чате {chat_id}")
+    
     @dp.message_created(Command('test'))
     async def cmd_test(event: MessageCreated):
+        """Тестовое сообщение"""
+        chat_id = get_chat_id_from_event(event)
         try:
             messages = load_messages()
             test_text = random.choice(messages)
-            await event.message.answer(f"🧪 Тест:\n\n{test_text}")
-            
-            chat_id = get_chat_id_from_event(event)
+            await bot.send_message(chat_id=chat_id, text=f"🧪 Тест:\n\n{test_text}")
             logger.debug(f"Тест отправлен в чат {chat_id}")
         except Exception as e:
-            await event.message.answer(f"❌ Ошибка: {e}")
+            await bot.send_message(chat_id=chat_id, text=f"❌ Ошибка: {e}")
             logger.error(f"Ошибка в /test: {e}")
-
+    
     @dp.message_created(Command('add'))
     async def cmd_add(event: MessageCreated):
-        # ✅ Правильный способ получить текст команды
+        """Добавляет сообщение в базу"""
+        chat_id = get_chat_id_from_event(event)
         text = event.message.body.text if event.message.body else ''
         parts = text.split(maxsplit=1)
         
         if len(parts) < 2 or not parts[1].strip():
-            await event.message.answer("❌ Использование: /add <текст сообщения>")
+            await bot.send_message(chat_id=chat_id, text="❌ Использование: /add <текст сообщения>")
             return
         
         new_message = parts[1].strip()
-        with MESSAGES_FILE.open('a', encoding='utf-8') as f:
-            f.write(f"\n{new_message}")
-        
-        await event.message.answer(f"✅ Добавлено:\n\n{new_message}")
+        add_message(new_message)
+        await bot.send_message(chat_id=chat_id, text=f"✅ Добавлено:\n\n{new_message}")
         logger.info(f"Добавлено сообщение: {new_message[:50]}...")
-
+    
     @dp.message_created(Command('list'))
     async def cmd_list(event: MessageCreated):
+        """Список сообщений"""
+        chat_id = get_chat_id_from_event(event)
         try:
             messages = load_messages()
             if not messages:
-                await event.message.answer("📭 База пуста.")
+                await bot.send_message(chat_id=chat_id, text="📭 База пуста.")
                 return
             
             items = [f"{i}. {msg[:50] + '...' if len(msg) > 50 else msg}" 
@@ -155,14 +137,16 @@ def register_handlers(dp):
             list_text = f"📋 **Сообщения ({len(messages)}):**\n\n" + '\n'.join(items)
             
             if len(list_text) > 4000:
-                await event.message.answer(f"📋 Всего сообщений: {len(messages)} (слишком много для списка)")
+                await bot.send_message(chat_id=chat_id, text=f"📋 Всего сообщений: {len(messages)}")
             else:
-                await event.message.answer(list_text)
+                await bot.send_message(chat_id=chat_id, text=list_text, parse_mode="markdown")
         except Exception as e:
-            await event.message.answer(f"❌ Ошибка: {e}")
-
+            await bot.send_message(chat_id=chat_id, text=f"❌ Ошибка: {e}")
+    
     @dp.message_created(Command('stats'))
     async def cmd_stats(event: MessageCreated):
+        """Статистика"""
+        chat_id = get_chat_id_from_event(event)
         try:
             messages = load_messages()
             total = len(messages)
@@ -172,166 +156,125 @@ def register_handlers(dp):
             
             stats_text = (
                 f"📊 **Статистика**\n\n"
-                f"• Сообщений в базе: {total}\n"
+                f"• Сообщений: {total}\n"
                 f"• Средняя длина: {avg_len} симв.\n"
                 f"• Размер файла: {size_kb:.1f} KB\n"
                 f"• Время отправки: {SEND_HOUR:02d}:{SEND_MINUTE:02d}\n"
-                f"• Ключевых слов (наборов): {keywords_count}\n"
+                f"• Ключевых слов: {keywords_count}\n"
                 f"• Чат: {'активирован' if state.chat_id else 'не активирован'}"
             )
-            await event.message.answer(stats_text)
+            await bot.send_message(chat_id=chat_id, text=stats_text, parse_mode="markdown")
         except Exception as e:
-            await event.message.answer(f"❌ Ошибка: {e}")
-
+            await bot.send_message(chat_id=chat_id, text=f"❌ Ошибка: {e}")
+    
     @dp.message_created(Command('time'))
     async def cmd_time(event: MessageCreated):
+        """Текущее время"""
+        chat_id = get_chat_id_from_event(event)
         now = datetime.now(MY_TIMEZONE)
-        await event.message.answer(f"🕐 {now.strftime('%H:%M:%S %d.%m.%Y')}")
-
-    @dp.message_created(Command('reload'))
-    async def cmd_reload(event: MessageCreated):
-        """Перезагружает ключевые слова из JSON файла"""
-        # ✅ Правильный способ
-        current_chat_id = event.chat_id if hasattr(event, 'chat_id') else None
-        
-        if state.chat_id is not None and current_chat_id != state.chat_id:
-            await event.message.answer("❌ У вас нет прав для этой команды.")
-            return
-        
-        try:
-            reload_keywords_config()
-            await event.message.answer("✅ Ключевые слова успешно перезагружены из keywords.json!")
-        except Exception as e:
-            await event.message.answer(f"❌ Ошибка при перезагрузке: {e}")
-
+        await bot.send_message(chat_id=chat_id, text=f"🕐 {now.strftime('%H:%M:%S %d.%m.%Y')} (по вашему времени)")
+    
     @dp.message_created(Command('next'))
     async def cmd_next(event: MessageCreated):
-        """Показывает время следующей запланированной отправки"""
-        from scheduler import get_next_run_time
-        
+        """Следующая отправка"""
+        chat_id = get_chat_id_from_event(event)
         next_time = get_next_run_time()
         now = datetime.now(MY_TIMEZONE)
         wait_minutes = int((next_time - now).total_seconds() / 60)
         
-        await event.message.answer(
-            f"⏰ **Следующая отправка:**\n\n"
-            f"• Время: {next_time.strftime('%H:%M:%S %d.%m.%Y')}\n"
-            f"• Через: {wait_minutes} минут\n"
-            f"• Часовой пояс: {MY_TIMEZONE}",
+        await bot.send_message(
+            chat_id=chat_id,
+            text=f"⏰ **Следующая отправка:**\n\n"
+                 f"• Время: {next_time.strftime('%H:%M:%S %d.%m.%Y')}\n"
+                 f"• Через: {wait_minutes} минут",
             parse_mode="markdown"
         )
     
+    @dp.message_created(Command('reload'))
+    async def cmd_reload(event: MessageCreated):
+        """Перезагружает ключевые слова"""
+        chat_id = get_chat_id_from_event(event)
+        
+        if state.chat_id is not None and chat_id != state.chat_id:
+            await bot.send_message(chat_id=chat_id, text="❌ У вас нет прав для этой команды.")
+            return
+        
+        try:
+            reload_keywords_config()
+            await bot.send_message(chat_id=chat_id, text="✅ Ключевые слова перезагружены!")
+        except Exception as e:
+            await bot.send_message(chat_id=chat_id, text=f"❌ Ошибка: {e}")
+    
+    # ===== ЕДИНЫЙ ОБРАБОТЧИК ТЕКСТОВЫХ СООБЩЕНИЙ =====
+    
     @dp.message_created()
-    async def handle_reply_buttons(event: MessageCreated):
+    async def handle_text_messages(event: MessageCreated):
         """
-        Обрабатывает нажатия на reply-кнопки (приходят как обычные сообщения)
+        Единый обработчик для всех текстовых сообщений:
+        - сначала проверяем кнопки
+        - потом ключевые слова
         """
-        # Получаем текст и chat_id
         text = event.message.body.text if event.message.body else ''
-        chat_id = event.chat_id if hasattr(event, 'chat_id') else None
+        text_lower = text.lower().strip()
+        chat_id = get_chat_id_from_event(event)
         
-        # Проверяем, является ли сообщение нажатием на кнопку
+        if not text:
+            return
+        
+        # 1. ПРОВЕРКА НА КНОПКИ (reply-клавиатура)
         action = get_action_for_button(text)
-        
-        if action is None:
-            return  # Не кнопка, выходим
-        
-        logger.info(f"Нажата reply-кнопка: '{text}' -> действие: {action}")
-        
-        # Обрабатываем действия
-        if action.startswith('/'):
-            # Это команда — вызываем соответствующий обработчик
-            if action == '/stats':
-                await cmd_stats(event)
-            elif action == '/list':
-                await cmd_list(event)
-            elif action == '/test':
-                await cmd_test(event)
-            elif action == '/time':
-                await cmd_time(event)
-            elif action == '/reload':
-                await cmd_reload(event)
-            elif action == '/next':
-                await cmd_next(event)
-        
-        elif action == "action_add":
-            # Запрашиваем текст для добавления
-            await event.bot.send_message(
-                chat_id=chat_id,
-                text="✏️ Введите текст нового сообщения:",
-                reply_markup=get_simple_reply_keyboard()
-            )
-        
-        elif action == "action_clear":
-            # Запрашиваем подтверждение очистки
-            await event.bot.send_message(
-                chat_id=chat_id,
-                text="⚠️ **Внимание!** Вы уверены, что хотите очистить базу сообщений?\n\nЭто действие нельзя отменить.",
-                reply_markup=get_simple_reply_keyboard(),
-                parse_mode="markdown"
-            )
-        
-        elif action == "action_confirm_yes":
-            # Подтверждение очистки
-            try:
-                with open(MESSAGES_FILE, 'w', encoding='utf-8') as f:
-                    f.write("")
-                await event.bot.send_message(
+        if action:
+            logger.info(f"Нажата кнопка: '{text}' -> {action}")
+            
+            if action.startswith('/'):
+                # Вызываем соответствующую команду
+                if action == '/stats':
+                    await cmd_stats(event)
+                elif action == '/list':
+                    await cmd_list(event)
+                elif action == '/test':
+                    await cmd_test(event)
+                elif action == '/time':
+                    await cmd_time(event)
+                elif action == '/reload':
+                    await cmd_reload(event)
+                elif action == '/next':
+                    await cmd_next(event)
+            elif action == "action_add":
+                await bot.send_message(
+                    chat_id=chat_id,
+                    text="✏️ Введите текст нового сообщения:",
+                    reply_markup=get_simple_reply_keyboard()
+                )
+            elif action == "action_confirm_yes":
+                clear_messages()
+                await bot.send_message(
                     chat_id=chat_id,
                     text="✅ База сообщений очищена!",
                     reply_markup=get_remove_keyboard()
                 )
-                logger.info(f"База сообщений очищена пользователем {chat_id}")
-            except Exception as e:
-                await event.bot.send_message(
-                    chat_id=chat_id,
-                    text=f"❌ Ошибка при очистке: {e}"
-                )
+                logger.info(f"База очищена в чате {chat_id}")
+            elif action == "action_close":
+                await cmd_hide_menu(event)
+            return  # Кнопка обработана, дальше не идём
         
-        elif action == "action_confirm_no":
-            # Отмена действия
-            await event.bot.send_message(
-                chat_id=chat_id,
-                text="❌ Действие отменено.",
-                reply_markup=get_remove_keyboard()
-            )
-        
-        elif action == "action_close":
-            # Скрываем клавиатуру
-            await cmd_hide_menu(event)
+        # 2. ПРОВЕРКА НА КЛЮЧЕВЫЕ СЛОВА (только если не команда)
+        if not text_lower.startswith('/') and len(text_lower) <= 100:
+            responses = get_keywords_config()
+            for response in responses:
+                keywords = response.get("keywords", [])
+                for keyword in keywords:
+                    if keyword.lower() in text_lower:
+                        logger.info(f"Сработало ключевое слово '{keyword}' в чате {chat_id}")
+                        await send_keyword_response(event, response, bot)
+                        return  # Ключевое слово обработано
     
-    async def handle_keywords(event: MessageCreated):
-        """Отвечает на сообщения по ключевым словам"""
-        # Получаем текст
-        text = event.message.body.text if event.message.body else ''
-        text_lower = text.lower().strip()
-        
-        # Игнорируем команды
-        if text_lower.startswith('/'):
-            return
-        
-        # Игнорируем слишком длинные сообщения
-        if len(text_lower) > 100:
-            return
-        
-        # Получаем chat_id
-        chat_id = event.chat_id if hasattr(event, 'chat_id') else 'unknown'
-        
-        # Загружаем конфигурацию
-        responses = get_keywords_config()
-        
-        # Ищем подходящий ответ
-        for response in responses:
-            keywords = response.get("keywords", [])
-            for keyword in keywords:
-                if keyword.lower() in text_lower:
-                    logger.info(f"Сработало ключевое слово '{keyword}' в чате {chat_id}")
-                    await send_keyword_response(event, response)
-                    return  # Важно: после ответа выходим, чтобы не обрабатывать дальше
-
+    # ===== НЕИЗВЕСТНЫЕ КОМАНДЫ =====
+    
     @dp.message_created()
     async def handle_unknown(event: MessageCreated):
         text = event.message.body.text if event.message.body else ''
         known_commands = ['/start', '/test', '/add', '/list', '/stats', '/time', '/reload', '/menu', '/hide_menu', '/next']
         if text and text.startswith('/') and text not in known_commands:
-            await event.message.answer("❓ Неизвестная команда. Напишите /start для списка команд.")
+            chat_id = get_chat_id_from_event(event)
+            await bot.send_message(chat_id=chat_id, text="❓ Неизвестная команда. Напишите /start для списка команд.")
