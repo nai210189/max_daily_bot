@@ -332,6 +332,6 @@ def register_handlers(dp):
     @dp.message_created()
     async def handle_unknown(event: MessageCreated):
         text = event.message.body.text if event.message.body else ''
-        known_commands = ['/start', '/test', '/add', '/list', '/stats', '/time', '/reload']
+        known_commands = ['/start', '/test', '/add', '/list', '/stats', '/time', '/reload', '/menu', '/hide_menu', '/next']
         if text and text.startswith('/') and text not in known_commands:
             await event.message.answer("❓ Неизвестная команда. Напишите /start для списка команд.")
