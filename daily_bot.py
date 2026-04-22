@@ -22,12 +22,12 @@ bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
 
-async def main():
+async def main() -> None:
     """Главная функция запуска"""
     logger.info("🚀 Запуск ежедневного бота...")
     
-    # Регистрируем обработчики команд
-    register_handlers(dp)
+    # Регистрируем обработчики (передаём и dp, и bot)
+    register_handlers(dp, bot)  # 👈 ИСПРАВЛЕНО: передаём оба аргумента
     
     # Восстанавливаем сохранённый chat_id
     saved_id = load_saved_chat_id()
@@ -38,6 +38,7 @@ async def main():
     # Запускаем планировщик
     scheduler_task = asyncio.create_task(daily_scheduler(bot))
     
+    # Очищаем вебхуки и запускаем polling
     await bot.delete_webhook()
     
     try:
