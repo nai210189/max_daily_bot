@@ -148,7 +148,7 @@ def register_handlers(dp):
         """
         Отвечает на сообщения по ключевым словам из JSON файла.
         """
-        # ✅ Правильный способ получить текст (из документации maxapi)
+        # Получаем текст сообщения
         text = event.message.body.text if event.message.body else ''
         text_lower = text.lower().strip()
         
@@ -166,12 +166,10 @@ def register_handlers(dp):
         # Ищем подходящий ответ
         for response in responses:
             keywords = response.get("keywords", [])
-            keywords_lower = [kw.lower() for kw in keywords]
-            
-            for keyword in keywords_lower:
-                if keyword in text_lower:
-                    # ✅ chat_id берём из event (согласно документации)
-                    logger.info(f"Ключевое слово в чате {event.message.chat_id}")
+            for keyword in keywords:
+                if keyword.lower() in text_lower:
+                    # ✅ Исправлено: используем event.message.chat_id
+                    logger.info(f"Сработало ключевое слово '{keyword}' в чате {event.message.chat_id}")
                     await send_keyword_response(event, response)
                     return
 
