@@ -7,7 +7,7 @@ from maxapi.types import MessageCreated, Command, BotStarted
 
 from config import MY_TIMEZONE, MESSAGES_FILE, SEND_HOUR, SEND_MINUTE
 from bot_state import state
-from utils import save_chat_id, load_messages
+from utils import save_chat_id, load_messages, get_chat_id_from_event
 from keywords_handler import get_keywords_config, reload_keywords_config, send_keyword_response
 
 logger = logging.getLogger(__name__)
@@ -66,16 +66,7 @@ def register_handlers(dp):
             test_text = random.choice(messages)
             await event.message.answer(f"🧪 Тест:\n\n{test_text}")
             
-            # Правильный способ получить chat_id для лога
-            if hasattr(event, 'chat_id'):
-                chat_id = event.chat_id
-            elif hasattr(event, 'message') and hasattr(event.message, 'chat'):
-                chat_id = event.message.chat.id
-            elif hasattr(event, 'message') and hasattr(event.message, 'chat_id'):
-                chat_id = event.message.chat_id
-            else:
-                chat_id = 'unknown'
-            
+            chat_id = get_chat_id_from_event(event)
             logger.debug(f"Тест отправлен в чат {chat_id}")
         except Exception as e:
             await event.message.answer(f"❌ Ошибка: {e}")
