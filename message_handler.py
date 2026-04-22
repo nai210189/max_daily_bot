@@ -31,6 +31,12 @@ async def ensure_chat_id(event: MessageCreated) -> None:
 def register_handlers(dp):
     """Регистрирует все обработчики команд"""
     
+    @dp.message_created()
+    async def debug_all_messages(event: MessageCreated):
+        """Отладочный обработчик — логирует все сообщения"""
+        logger.info(f"🔍 ПОЛУЧЕНО СООБЩЕНИЕ! chat_id={event.message.chat.id if hasattr(event.message, 'chat') else 'no chat'}")
+        # Не отвечаем, просто логируем
+    
     @dp.bot_started()
     async def on_bot_started(event: BotStarted):
         chat_id = event.chat_id
