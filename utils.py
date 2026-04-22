@@ -24,25 +24,32 @@ def load_saved_chat_id() -> int | None:
 
 
 def get_chat_id_from_event(event) -> int | None:
-    """Получение chat_id через recipient"""
+    """
+    Получение chat_id из события.
+    Адаптировано под структуру maxapi 1.0.0
+    """
     try:
-        # Пробуем через recipient (получатель сообщения)
+        # Вариант 1: event.chat.chat_id
+        if hasattr(event, 'chat') and hasattr(event.chat, 'chat_id'):
+            return event.chat.chat_id
+        
+        # Вариант 2: event.message.recipient.chat_id
         if hasattr(event, 'message') and hasattr(event.message, 'recipient'):
-            if hasattr(event.message.recipient, 'id'):
-                return event.message.recipient.id
+            if hasattr(event.message.recipient, 'chat_id'):
+                return event.message.recipient.chat_id
         
-        # Пробуем через sender (отправитель)
-        if hasattr(event, 'message') and hasattr(event.message, 'sender'):
-            if hasattr(event.message.sender, 'id'):
-                return event.message.sender.id
-        
-        # Прямой доступ
+        # Вариант 3: напрямую event.chat_id
         if hasattr(event, 'chat_id'):
             return event.chat_id
+        
+        # Вариант 4: через словарь __dict__
+        if hasattr(event, '__dict__') and 'chat_id' in event.__dict__:
+            return event.__dict__['chat_id']
         
     except Exception as e:
         logger.error(f"Ошибка получения chat_id: {e}")
     
+    logger.warning(f"Не удалось получить chat_id из события: {type(event)}")
     return None
 
 
