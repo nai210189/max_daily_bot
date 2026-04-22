@@ -17,5 +17,10 @@ CHAT_ID_FILE: Final[Path] = Path("chat_id.txt")
 KEYWORDS_FILE: Final[Path] = Path("keywords.json")
 
 # ===== ВРЕМЯ ОТПРАВКИ =====
-SEND_HOUR = 9
-SEND_MINUTE = 40
+from datetime import datetime
+now = datetime.now()
+SEND_HOUR = now.hour
+SEND_MINUTE = now.minute + 5  # через 2 минуты
+if SEND_MINUTE >= 60:
+    SEND_MINUTE -= 60
+    SEND_HOUR += 1
