@@ -65,7 +65,18 @@ def register_handlers(dp):
             messages = load_messages()
             test_text = random.choice(messages)
             await event.message.answer(f"🧪 Тест:\n\n{test_text}")
-            logger.debug(f"Тест отправлен в чат {event.chat_id}")
+            
+            # Правильный способ получить chat_id для лога
+            if hasattr(event, 'chat_id'):
+                chat_id = event.chat_id
+            elif hasattr(event, 'message') and hasattr(event.message, 'chat'):
+                chat_id = event.message.chat.id
+            elif hasattr(event, 'message') and hasattr(event.message, 'chat_id'):
+                chat_id = event.message.chat_id
+            else:
+                chat_id = 'unknown'
+            
+            logger.debug(f"Тест отправлен в чат {chat_id}")
         except Exception as e:
             await event.message.answer(f"❌ Ошибка: {e}")
             logger.error(f"Ошибка в /test: {e}")
