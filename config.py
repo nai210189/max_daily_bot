@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 from typing import Final
 from zoneinfo import ZoneInfo
+from datetime import datetime
 
 # ===== ТОКЕН БОТА =====
 BOT_TOKEN: Final[str | None] = os.getenv("BOT_TOKEN")
