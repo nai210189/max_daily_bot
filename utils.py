@@ -24,34 +24,24 @@ def load_saved_chat_id() -> int | None:
 
 
 def get_chat_id_from_event(event) -> int | None:
-    """
-    Универсальное получение chat_id из события.
-    Для maxapi 1.0.0 chat_id может быть в разных местах.
-    """
-    # Пробуем разные варианты
-    
-    # Вариант 1: напрямую из события (самый вероятный)
-    if hasattr(event, 'chat_id'):
-        return event.chat_id
-    
-    # Вариант 2: из event.message
-    if hasattr(event, 'message'):
-        if hasattr(event.message, 'chat_id'):
-            return event.message.chat_id
-        if hasattr(event.message, 'chat') and hasattr(event.message.chat, 'id'):
-            return event.message.chat.id
-    
-    # Вариант 3: через атрибуты __dict__
-    if hasattr(event, '__dict__') and 'chat_id' in event.__dict__:
-        return event.__dict__['chat_id']
-    
-    # Вариант 4: если событие - это словарь
-    if isinstance(event, dict) and 'chat_id' in event:
-        return event['chat_id']
-    
-    # Если ничего не нашли, логируем для отладки
-    logger = logging.getLogger(__name__)
-    logger.error(f"Не удалось получить chat_id. Доступные атрибуты: {[a for a in dir(event) if not a.startswith('_')]}")
+    """Получение chat_id через recipient"""
+    try:
+        # Пробуем через recipient (получатель сообщения)
+        if hasattr(event, 'message') and hasattr(event.message, 'recipient'):
+            if hasattr(event.message.recipient, 'id'):
+                return event.message.recipient.id
+        
+        # Пробуем через sender (отправитель)
+        if hasattr(event, 'message') and hasattr(event.message, 'sender'):
+            if hasattr(event.message.sender, 'id'):
+                return event.message.sender.id
+        
+        # Прямой доступ
+        if hasattr(event, 'chat_id'):
+            return event.chat_id
+        
+    except Exception as e:
+        logger.error(f"Ошибка получения chat_id: {e}")
     
     return None
 
