@@ -15,11 +15,11 @@ logger = logging.getLogger(__name__)
 
 async def ensure_chat_id(event: MessageCreated) -> None:
     """Сохраняет chat_id из события"""
-    # Правильный способ для вашей версии библиотеки
-    if hasattr(event.message, 'chat') and hasattr(event.message.chat, 'id'):
-        chat_id = event.message.chat.id
+    # ✅ Правильный способ для вашей версии
+    if hasattr(event, 'chat_id'):
+        chat_id = event.chat_id
     else:
-        logger.warning("Не удалось получить chat_id из event.message.chat.id")
+        logger.warning("Не удалось получить chat_id из event.chat_id")
         return
     
     if state.chat_id != chat_id:
@@ -34,8 +34,13 @@ def register_handlers(dp):
     @dp.message_created()
     async def debug_all_messages(event: MessageCreated):
         """Отладочный обработчик — логирует все сообщения"""
-        logger.info(f"🔍 ПОЛУЧЕНО СООБЩЕНИЕ! chat_id={event.message.chat.id if hasattr(event.message, 'chat') else 'no chat'}")
-        # Не отвечаем, просто логируем
+        # ✅ Правильный способ получить chat_id
+        chat_id = event.chat_id if hasattr(event, 'chat_id') else 'no chat_id'
+        text = event.message.text if hasattr(event.message, 'text') else 'no text'
+        logger.info(f"🔍 ПОЛУЧЕНО СООБЩЕНИЕ! chat_id={chat_id}, текст={text[:50]}")
+        
+        # Отправляем эхо для проверки
+        await event.message.answer(f"Эхо: {text}")
     
     @dp.bot_started()
     async def on_bot_started(event: BotStarted):
@@ -72,7 +77,7 @@ def register_handlers(dp):
             messages = load_messages()
             test_text = random.choice(messages)
             await event.message.answer(f"🧪 Тест:\n\n{test_text}")
-            logger.debug(f"Тест отправлен в чат {event.message.chat.id if hasattr(event.message, 'chat') else 'unknown'}")
+            logger.debug(f"Тест отправлен в чат {event.chat_id}")
         except Exception as e:
             await event.message.answer(f"❌ Ошибка: {e}")
             logger.error(f"Ошибка в /test: {e}")
@@ -141,8 +146,8 @@ def register_handlers(dp):
     @dp.message_created(Command('reload'))
     async def cmd_reload(event: MessageCreated):
         """Перезагружает ключевые слова из JSON файла"""
-        # Получаем chat_id
-        current_chat_id = event.message.chat.id if hasattr(event.message, 'chat') else None
+        # ✅ Правильный способ
+        current_chat_id = event.chat_id if hasattr(event, 'chat_id') else None
         
         if state.chat_id is not None and current_chat_id != state.chat_id:
             await event.message.answer("❌ У вас нет прав для этой команды.")
@@ -158,7 +163,7 @@ def register_handlers(dp):
     async def handle_keywords(event: MessageCreated):
         """Отвечает на сообщения по ключевым словам"""
         # Получаем текст
-        text = event.message.body.text if event.message.body else ''
+        text = event.message.text if hasattr(event.message, 'text') else ''
         text_lower = text.lower().strip()
         
         # Игнорируем команды
@@ -169,8 +174,8 @@ def register_handlers(dp):
         if len(text_lower) > 100:
             return
         
-        # Получаем chat_id для лога
-        chat_id = event.message.chat.id if hasattr(event.message, 'chat') else 'unknown'
+        # ✅ Правильный способ получить chat_id
+        chat_id = event.chat_id if hasattr(event, 'chat_id') else 'unknown'
         
         # Загружаем конфигурацию
         responses = get_keywords_config()
