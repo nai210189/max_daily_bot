@@ -53,27 +53,16 @@ def load_messages() -> list[str]:
 # ===== ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ ПОЛУЧЕНИЯ CHAT_ID =====
 def get_chat_id_from_event(event) -> int | None:
     """
-    Универсальное получение chat_id из события.
-    Адаптировано под вашу версию библиотеки maxapi.
+    Получение chat_id из события.
     """
-    # Вариант 1: через event.message.chat.id (основной способ)
-    if hasattr(event, 'message') and hasattr(event.message, 'chat'):
-        if hasattr(event.message.chat, 'id'):
-            return event.message.chat.id
-    
-    # Вариант 2: для BotStarted
+    # Прямой доступ - самый надёжный способ
     if hasattr(event, 'chat_id'):
         return event.chat_id
     
-    # Вариант 3: через event.chat.id
-    if hasattr(event, 'chat') and hasattr(event.chat, 'id'):
-        return event.chat.id
-    
-    # Логируем ошибку для отладки
-    logger = logging.getLogger(__name__)
-    logger.error(f"Не удалось получить chat_id. event: {type(event)}")
-    if hasattr(event, 'message'):
-        logger.error(f"event.message атрибуты: {dir(event.message)}")
+    # Через recipient
+    if hasattr(event, 'message') and hasattr(event.message, 'recipient'):
+        if hasattr(event.message.recipient, 'chat_id'):
+            return event.message.recipient.chat_id
     
     return None
 
