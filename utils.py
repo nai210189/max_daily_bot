@@ -1,23 +1,8 @@
 import logging
 import random
 from pathlib import Path
-from typing import Optional
 
 from config import CHAT_ID_FILE, MESSAGES_FILE
-
-# Импортируем асинхронные функции из db.py
-from db import (
-    add_message_db as add_message,
-    load_messages_db as load_messages,
-    clear_messages_db as clear_messages,
-    get_random_message_db as get_random_message,
-    get_messages_count_db as get_messages_count,
-    get_messages_total_length_db as get_messages_total_length,
-    save_chat_id_db as save_chat_id,
-    load_chat_id_db as load_saved_chat_id,
-    load_keywords_db as load_keywords,
-    get_keywords_count_db as get_keywords_count,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -87,8 +72,3 @@ def clear_messages() -> None:
     """Очищает базу сообщений"""
     MESSAGES_FILE.write_text('', encoding='utf-8')
     logger.info("База сообщений очищена")
-
-
-def get_random_message(messages: list[str]) -> str:
-    """Возвращает случайное сообщение из списка"""
-    return random.choice(messages)
