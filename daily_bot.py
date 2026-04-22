@@ -24,10 +24,10 @@ dp = Dispatcher()
 
 async def main():
     """Главная функция запуска"""
-    logger.info("🚀 Запуск ежедневного бота...")
+    logger.info("🚀🚀🚀 Запуск ежедневного бота...")
     
     # Регистрируем обработчики команд
-    register_handlers(dp)
+    register_handlers(dp, bot)
     
     # Восстанавливаем сохранённый chat_id
     saved_id = load_saved_chat_id()
