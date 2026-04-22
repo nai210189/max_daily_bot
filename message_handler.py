@@ -33,19 +33,31 @@ def register_handlers(dp):
     
     @dp.message_created()
     async def debug_all_messages(event: MessageCreated):
-        """Отладочный обработчик"""
-        # ✅ Самый вероятный правильный способ
-        if hasattr(event.message, 'body') and hasattr(event.message.body, 'text'):
-            text = event.message.body.text
-        elif hasattr(event.message, 'text'):
-            text = event.message.text
-        else:
-            text = "текст не найден"
+        """Отладочный обработчик — показывает все возможные пути получения текста"""
         
-        chat_id = event.chat_id if hasattr(event, 'chat_id') else 'unknown'
+        # Пробуем разные варианты получения текста
+        text_variants = []
         
-        logger.info(f"🔍 ПОЛУЧЕНО: chat_id={chat_id}, текст={text}")
-        await event.message.answer(f"Эхо: {text}")
+        if hasattr(event.message, 'text'):
+            text_variants.append(f"event.message.text = {event.message.text}")
+        
+        if hasattr(event.message, 'body'):
+            if isinstance(event.message.body, dict):
+                text_variants.append(f"event.message.body.get('text') = {event.message.body.get('text')}")
+            else:
+                text_variants.append(f"event.message.body = {event.message.body}")
+        
+        if hasattr(event.message, 'content'):
+            text_variants.append(f"event.message.content = {event.message.content}")
+        
+        # Логируем всё
+        logger.info(f"🔍 ПОЛУЧЕНО СООБЩЕНИЕ! chat_id={event.chat_id if hasattr(event, 'chat_id') else 'no'}")
+        for variant in text_variants:
+            logger.info(f"   {variant}")
+        
+        # Отправляем ответ с информацией
+        response = "Получено сообщение:\n" + "\n".join(text_variants)
+        await event.message.answer(response)
     
     @dp.bot_started()
     async def on_bot_started(event: BotStarted):
