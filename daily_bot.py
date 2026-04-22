@@ -22,7 +22,7 @@ bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
 
-async def main() -> None:
+async def main():
     """Главная функция запуска"""
     logger.info("🚀 Запуск ежедневного бота...")
     
