@@ -42,26 +42,26 @@ def register_handlers(dp):
         """
         Показывает главное меню (reply-клавиатуру)
         """
-        # Проверяем, администратор ли пользователь
+        # Получаем chat_id
         chat_id = event.chat_id if hasattr(event, 'chat_id') else None
-        is_admin = (state.chat_id == chat_id)  # Тот, кто активировал бота
+        
+        # Проверяем, администратор ли пользователь
+        is_admin = (state.chat_id == chat_id)
         
         if is_admin:
             keyboard = get_admin_reply_keyboard()
-            await event.message.answer(
-                "🔧 **Панель управления ботом**\n\n"
-                "Нажмите на кнопку для выполнения действия:",
-                reply_markup=keyboard,
-                parse_mode="markdown"
-            )
+            text = "🔧 **Панель управления ботом**\n\nНажмите на кнопку для выполнения действия:"
         else:
             keyboard = get_main_reply_keyboard()
-            await event.message.answer(
-                "🔧 **Быстрое меню**\n\n"
-                "Нажмите на кнопку для выполнения действия:",
-                reply_markup=keyboard,
-                parse_mode="markdown"
-            )
+            text = "🔧 **Быстрое меню**\n\nНажмите на кнопку для выполнения действия:"
+        
+        # ✅ Используем bot.send_message вместо message.answer
+        await event.bot.send_message(
+            chat_id=chat_id,
+            text=text,
+            reply_markup=keyboard,
+            parse_mode="markdown"
+        )
         
         logger.info(f"Меню показано в чате {chat_id}")
     
@@ -71,12 +71,17 @@ def register_handlers(dp):
         """
         Скрывает reply-клавиатуру
         """
+        chat_id = event.chat_id if hasattr(event, 'chat_id') else None
         keyboard = get_remove_keyboard()
-        await event.message.answer(
-            "✅ Клавиатура скрыта. Отправьте /menu чтобы показать снова.",
+        
+        # ✅ Используем bot.send_message
+        await event.bot.send_message(
+            chat_id=chat_id,
+            text="✅ Клавиатура скрыта. Отправьте /menu чтобы показать снова.",
             reply_markup=keyboard
         )
-        logger.info(f"Клавиатура скрыта в чате {event.chat_id if hasattr(event, 'chat_id') else 'unknown'}")
+        
+        logger.info(f"Клавиатура скрыта в чате {chat_id}")
     
     @dp.bot_started()
     async def on_bot_started(event: BotStarted):
@@ -221,8 +226,9 @@ def register_handlers(dp):
         """
         Обрабатывает нажатия на reply-кнопки (приходят как обычные сообщения)
         """
-        # Получаем текст сообщения
+        # Получаем текст и chat_id
         text = event.message.body.text if event.message.body else ''
+        chat_id = event.chat_id if hasattr(event, 'chat_id') else None
         
         # Проверяем, является ли сообщение нажатием на кнопку
         action = get_action_for_button(text)
@@ -234,10 +240,7 @@ def register_handlers(dp):
         
         # Обрабатываем действия
         if action.startswith('/'):
-            # Это команда — можно вызвать соответствующий обработчик
-            # Но проще отправить команду как текст и позволить другим обработчикам сработать
-            # Однако, чтобы не было цикла, лучше вызвать напрямую
-            
+            # Это команда — вызываем соответствующий обработчик
             if action == '/stats':
                 await cmd_stats(event)
             elif action == '/list':
@@ -249,28 +252,21 @@ def register_handlers(dp):
             elif action == '/reload':
                 await cmd_reload(event)
             elif action == '/next':
-                # Временно создадим обработчик /next или вызовем существующий
-                await cmd_next(event)  # Нужно добавить команду /next
-            else:
-                # Если команда не распознана, отправляем как текст
-                # Это вызовет обычный поток обработки сообщений
-                # Но будьте осторожны — может быть бесконечный цикл
-                pass
+                await cmd_next(event)
         
         elif action == "action_add":
             # Запрашиваем текст для добавления
-            await event.message.answer(
-                "✏️ Введите текст нового сообщения:",
+            await event.bot.send_message(
+                chat_id=chat_id,
+                text="✏️ Введите текст нового сообщения:",
                 reply_markup=get_simple_reply_keyboard()
             )
-            # Здесь можно установить состояние ожидания ввода (FSM)
-            # Для простоты пока просто просим ввести текст
         
         elif action == "action_clear":
             # Запрашиваем подтверждение очистки
-            await event.message.answer(
-                "⚠️ **Внимание!** Вы уверены, что хотите очистить базу сообщений?\n\n"
-                "Это действие нельзя отменить.",
+            await event.bot.send_message(
+                chat_id=chat_id,
+                text="⚠️ **Внимание!** Вы уверены, что хотите очистить базу сообщений?\n\nЭто действие нельзя отменить.",
                 reply_markup=get_simple_reply_keyboard(),
                 parse_mode="markdown"
             )
@@ -278,21 +274,25 @@ def register_handlers(dp):
         elif action == "action_confirm_yes":
             # Подтверждение очистки
             try:
-                # Очищаем файл messages.txt
                 with open(MESSAGES_FILE, 'w', encoding='utf-8') as f:
                     f.write("")
-                await event.message.answer(
-                    "✅ База сообщений очищена!",
+                await event.bot.send_message(
+                    chat_id=chat_id,
+                    text="✅ База сообщений очищена!",
                     reply_markup=get_remove_keyboard()
                 )
-                logger.info(f"База сообщений очищена пользователем {event.chat_id}")
+                logger.info(f"База сообщений очищена пользователем {chat_id}")
             except Exception as e:
-                await event.message.answer(f"❌ Ошибка при очистке: {e}")
+                await event.bot.send_message(
+                    chat_id=chat_id,
+                    text=f"❌ Ошибка при очистке: {e}"
+                )
         
         elif action == "action_confirm_no":
             # Отмена действия
-            await event.message.answer(
-                "❌ Действие отменено.",
+            await event.bot.send_message(
+                chat_id=chat_id,
+                text="❌ Действие отменено.",
                 reply_markup=get_remove_keyboard()
             )
         
