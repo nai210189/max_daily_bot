@@ -20,16 +20,23 @@ logger = logging.getLogger(__name__)
 
 
 def get_chat_id(event) -> int | None:
-    """Получает chat_id из события"""
-    # Прямой доступ из лога: event.chat.chat_id
-    if hasattr(event, 'chat') and hasattr(event.chat, 'chat_id'):
-        return event.chat.chat_id
-    # Альтернативный способ
+    """
+    Получает chat_id из события.
+    Для maxapi 1.0.0 chat_id находится в event.chat_id (в логах видно)
+    """
+    # Прямой доступ - из логов видно, что chat_id есть в event
     if hasattr(event, 'chat_id'):
         return event.chat_id
+    
+    # Для MessageCreated - через recipient
+    if hasattr(event, 'message') and hasattr(event.message, 'recipient'):
+        if hasattr(event.message.recipient, 'chat_id'):
+            return event.message.recipient.chat_id
+    
     # Для BotStarted
     if hasattr(event, 'chat_id'):
         return event.chat_id
+    
     logger.warning(f"Не удалось получить chat_id из {type(event)}")
     return None
 
