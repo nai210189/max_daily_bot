@@ -1,10 +1,11 @@
 import asyncio
 import logging
+import random
 from datetime import datetime, timedelta
 
 from config import MY_TIMEZONE, SEND_HOUR, SEND_MINUTE
 from bot_state import state
-from utils import get_random_message
+from utils import load_messages
 
 logger = logging.getLogger(__name__)
 
@@ -19,21 +20,14 @@ def get_next_run_time() -> datetime:
 
 
 async def send_daily_message(bot) -> None:
-    """Отправляет случайное сообщение из БД"""
+    """Отправляет случайное сообщение"""
     if state.chat_id is None:
         logger.warning("Чат не установлен")
         return
     
     try:
-        daily_text = await get_random_message()
-        if not daily_text:
-            logger.warning("Нет сообщений в базе данных")
-            await bot.send_message(
-                chat_id=state.chat_id,
-                text="⚠️ База сообщений пуста! Добавьте сообщения через /add"
-            )
-            return
-        
+        messages = load_messages()
+        daily_text = random.choice(messages)
         await bot.send_message(chat_id=state.chat_id, text=daily_text)
         logger.info(f"Сообщение отправлено в чат {state.chat_id}")
     except Exception as e:
