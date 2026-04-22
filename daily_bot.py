@@ -3,9 +3,9 @@ import logging
 
 from maxapi import Bot, Dispatcher
 
-from config import BOT_TOKEN
+from config import BOT_TOKEN, DATABASE_URL
 from bot_state import state
-from utils import load_saved_chat_id
+from db import init_db, close_db, load_chat_id_db
 from scheduler import daily_scheduler
 from message_handler import register_handlers
 
@@ -26,11 +26,14 @@ async def main():
     """Главная функция запуска"""
     logger.info("🚀 Запуск ежедневного бота...")
     
+    # Инициализируем базу данных
+    await init_db(DATABASE_URL)
+    
     # Регистрируем обработчики команд
     register_handlers(dp, bot)
     
-    # Восстанавливаем сохранённый chat_id
-    saved_id = load_saved_chat_id()
+    # Восстанавливаем сохранённый chat_id из БД
+    saved_id = await load_chat_id_db()
     if saved_id:
         state.chat_id = saved_id
         logger.info(f"Восстановлен chat_id: {state.chat_id}")
@@ -45,6 +48,7 @@ async def main():
     finally:
         scheduler_task.cancel()
         await asyncio.gather(scheduler_task, return_exceptions=True)
+        await close_db()
         logger.info("Бот остановлен")
 
 
