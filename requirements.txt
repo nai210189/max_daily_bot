@@ -1,2 +1,2 @@
 python-dotenv
-maxapi>=1.0.0
+maxapi==1.0.0
