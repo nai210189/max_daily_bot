@@ -86,7 +86,7 @@ def reload_keywords_config() -> list[dict[str, Any]]:
 
 
 async def send_keyword_response(event: MessageCreated, response: dict[str, Any], bot) -> None:
-    """Отправляет ответ пользователю"""
+    """Отправляет ответ пользователю (только текст, без картинок)"""
     response_type = response.get("type", "text")
     content = response.get("content", "")
     caption = response.get("caption", "")
@@ -95,12 +95,14 @@ async def send_keyword_response(event: MessageCreated, response: dict[str, Any],
     try:
         if response_type == "text":
             await bot.send_message(chat_id=chat_id, text=content)
-        elif response_type == "image":
-            if content.startswith(('http://', 'https://')):
-                await bot.send_photo(chat_id=chat_id, photo=content, caption=caption)
-            else:
-                await bot.send_message(chat_id=chat_id, text=caption or "❌ Изображение недоступно")
+            logger.debug(f"Отправлен текстовый ответ: {content[:50]}...")
         else:
-            await bot.send_message(chat_id=chat_id, text=content)
+            # Для image и других типов просто отправляем текст или подпись
+            if caption:
+                await bot.send_message(chat_id=chat_id, text=caption)
+            else:
+                await bot.send_message(chat_id=chat_id, text=content or "❌ Ответ не может быть отправлен")
+            logger.warning(f"Тип ответа '{response_type}' преобразован в текст")
     except Exception as e:
         logger.error(f"Ошибка при отправке ответа: {e}")
+        await bot.send_message(chat_id=chat_id, text="❌ Произошла ошибка при отправке ответа")
