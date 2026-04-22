@@ -144,22 +144,36 @@ def register_handlers(dp):
             await event.message.answer(f"❌ Ошибка при перезагрузке: {e}")
 
     @dp.message_created(F.message.body.text)
-    async def handle_keywords(event: MessageCreated):
-        text = event.message.body.get('text', '') if event.message.body else ''
-        text_lower = text.lower().strip()
+async def handle_keywords(event: MessageCreated):
+    """
+    Отвечает на сообщения по ключевым словам из JSON файла.
+    """
+    # ✅ Правильный способ получить текст (из документации maxapi)
+    text = event.message.body.text if event.message.body else ''
+    text_lower = text.lower().strip()
+    
+    # Игнорируем команды
+    if text_lower.startswith('/'):
+        return
+    
+    # Игнорируем слишком длинные сообщения
+    if len(text_lower) > 100:
+        return
+    
+    # Загружаем конфигурацию
+    responses = get_keywords_config()
+    
+    # Ищем подходящий ответ
+    for response in responses:
+        keywords = response.get("keywords", [])
+        keywords_lower = [kw.lower() for kw in keywords]
         
-        if text_lower.startswith('/') or len(text_lower) > 100:
-            return
-        
-        responses = get_keywords_config()
-        for response in responses:
-            keywords_lower = [kw.lower() for kw in response.get("keywords", [])]
-            for keyword in keywords_lower:
-                if keyword in text_lower:
-                    chat_id = get_chat_id_from_event(event)
-                    logger.info(f"Сработало ключевое слово '{keyword}' в чате {chat_id}")
-                    await send_keyword_response(event, response)
-                    return
+        for keyword in keywords_lower:
+            if keyword in text_lower:
+                # ✅ chat_id берём из event (согласно документации)
+                logger.info(f"Сработало ключевое слово '{keyword}' в чате {event.chat_id}")
+                await send_keyword_response(event, response)
+                return
 
     @dp.message_created()
     async def handle_unknown(event: MessageCreated):
