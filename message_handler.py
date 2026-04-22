@@ -9,12 +9,6 @@ from config import MY_TIMEZONE, MESSAGES_FILE, SEND_HOUR, SEND_MINUTE
 from bot_state import state
 from utils import save_chat_id, load_messages, add_message, clear_messages
 from keywords_handler import get_keywords_config, reload_keywords_config, send_keyword_response
-from keyboards import (
-    get_main_reply_keyboard,
-    get_remove_keyboard,
-    get_simple_reply_keyboard,
-    get_action_for_button
-)
 
 logger = logging.getLogger(__name__)
 
@@ -93,16 +87,23 @@ def register_handlers(dp: Dispatcher, bot: Bot):
             logger.warning("Не удалось получить chat_id в /menu")
             return
         
-        keyboard = get_main_reply_keyboard()
+        # Отправляем просто текст без клавиатуры
         await bot.send_message(
             chat_id=chat_id,
-            text="🔧 **Панель управления**\n\nНажмите на кнопку:",
-            reply_markup=keyboard,
+            text="🔧 **Панель управления**\n\n"
+                 "Доступные команды:\n"
+                 "/stats - статистика\n"
+                 "/list - список сообщений\n"
+                 "/test - тестовое сообщение\n"
+                 "/time - текущее время\n"
+                 "/add <текст> - добавить сообщение\n"
+                 "/reload - перезагрузить ключевые слова\n"
+                 "/hide_menu - скрыть это меню",
             parse_mode="markdown"
         )
         logger.info(f"Меню показано в чате {chat_id}")
 
-    @dp.message_created(Command('hide_menu'))
+   @dp.message_created(Command('hide_menu'))
     async def cmd_hide_menu(event: MessageCreated):
         chat_id = get_chat_id(event)
         if not chat_id:
@@ -111,10 +112,9 @@ def register_handlers(dp: Dispatcher, bot: Bot):
         
         await bot.send_message(
             chat_id=chat_id,
-            text="✅ Клавиатура скрыта. Отправьте /menu чтобы показать снова.",
-            reply_markup=get_remove_keyboard()
+            text="✅ Меню скрыто. Отправьте /menu чтобы показать снова."
         )
-        logger.info(f"Клавиатура скрыта в чате {chat_id}")
+        logger.info(f"Меню скрыто в чате {chat_id}")
 
     @dp.message_created(Command('test'))
     async def cmd_test(event: MessageCreated):
@@ -251,48 +251,7 @@ def register_handlers(dp: Dispatcher, bot: Bot):
                     logger.info(f"Сработало ключевое слово '{keyword}'")
                     await send_keyword_response(event, response, bot)
                     return
-
-    # ===== ОБРАБОТЧИК REPLY-КНОПОК =====
-    @dp.message_created()
-    async def handle_reply_buttons(event: MessageCreated):
-        text = event.message.body.text if event.message.body else ''
-        chat_id = get_chat_id(event)
-        
-        if not chat_id:
-            return
-        
-        action = get_action_for_button(text)
-        if action is None:
-            return
-        
-        logger.info(f"Нажата кнопка: '{text}' -> {action}")
-        
-        if action.startswith('/'):
-            if action == '/stats':
-                await cmd_stats(event)
-            elif action == '/list':
-                await cmd_list(event)
-            elif action == '/test':
-                await cmd_test(event)
-            elif action == '/time':
-                await cmd_time(event)
-            elif action == '/reload':
-                await cmd_reload(event)
-        elif action == "action_add":
-            await bot.send_message(
-                chat_id=chat_id,
-                text="✏️ Введите текст нового сообщения:",
-                reply_markup=get_simple_reply_keyboard()
-            )
-        elif action == "action_confirm_yes":
-            clear_messages()
-            await bot.send_message(
-                chat_id=chat_id,
-                text="✅ База сообщений очищена!",
-                reply_markup=get_remove_keyboard()
-            )
-        elif action == "action_close":
-            await cmd_hide_menu(event)
+                    
 
     # ===== НЕИЗВЕСТНЫЕ КОМАНДЫ =====
     @dp.message_created()
