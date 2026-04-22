@@ -38,12 +38,10 @@ async def main():
     # Запускаем планировщик
     scheduler_task = asyncio.create_task(daily_scheduler(bot))
     
-    # Удаляем вебхук (если был)
     await bot.delete_webhook()
     
     try:
-        # Запускаем поллинг с обработкой callback_query
-        await dp.start_polling(bot, allowed_updates=["message", "callback_query"])
+        await dp.start_polling(bot)
     finally:
         scheduler_task.cancel()
         await asyncio.gather(scheduler_task, return_exceptions=True)
