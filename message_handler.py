@@ -82,8 +82,10 @@ def register_handlers(dp):
 
     @dp.message_created(Command('add'))
     async def cmd_add(event: MessageCreated):
-        text = getattr(event.message, 'text', '') or ''
+        # ✅ Правильный способ получить текст команды
+        text = event.message.body.text if event.message.body else ''
         parts = text.split(maxsplit=1)
+        
         if len(parts) < 2 or not parts[1].strip():
             await event.message.answer("❌ Использование: /add <текст сообщения>")
             return
@@ -139,7 +141,7 @@ def register_handlers(dp):
     @dp.message_created(Command('time'))
     async def cmd_time(event: MessageCreated):
         now = datetime.now(MY_TIMEZONE)
-        await event.message.answer(f"🕐 {now.strftime('%H:%M:%S %d.%m.%Y')} (по вашему времени)")
+        await event.message.answer(f"🕐 {now.strftime('%H:%M:%S %d.%m.%Y')}")
 
     @dp.message_created(Command('reload'))
     async def cmd_reload(event: MessageCreated):
@@ -157,16 +159,11 @@ def register_handlers(dp):
         except Exception as e:
             await event.message.answer(f"❌ Ошибка при перезагрузке: {e}")
 
-    @dp.message_created(F.message.text)  # или без фильтра
+    @dp.message_created(F.message.body.text)
     async def handle_keywords(event: MessageCreated):
         """Отвечает на сообщения по ключевым словам"""
-        
-        # Получаем текст (используйте тот способ, который сработал)
-        if hasattr(event.message, 'body') and hasattr(event.message.body, 'text'):
-            text = event.message.body.text
-        else:
-            text = getattr(event.message, 'text', '')
-        
+        # ✅ Правильный способ получить текст
+        text = event.message.body.text if event.message.body else ''
         text_lower = text.lower().strip()
         
         # Игнорируем команды
@@ -177,6 +174,7 @@ def register_handlers(dp):
         if len(text_lower) > 100:
             return
         
+        # Получаем chat_id
         chat_id = event.chat_id if hasattr(event, 'chat_id') else 'unknown'
         
         # Загружаем конфигурацию
@@ -193,7 +191,7 @@ def register_handlers(dp):
 
     @dp.message_created()
     async def handle_unknown(event: MessageCreated):
-        text = getattr(event.message, 'text', '') or ''
+        text = event.message.body.text if event.message.body else ''
         known_commands = ['/start', '/test', '/add', '/list', '/stats', '/time', '/reload']
         if text and text.startswith('/') and text not in known_commands:
             await event.message.answer("❓ Неизвестная команда. Напишите /start для списка команд.")
