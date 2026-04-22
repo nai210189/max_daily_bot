@@ -7,7 +7,7 @@ from maxapi.types import MessageCreated, Command, BotStarted
 
 from config import MY_TIMEZONE, MESSAGES_FILE, SEND_HOUR, SEND_MINUTE
 from bot_state import state
-from utils import save_chat_id, load_messages, add_message, clear_messages, get_chat_id_from_event
+from utils import save_chat_id, load_messages, add_message, clear_messages
 from keywords_handler import get_keywords_config, reload_keywords_config, send_keyword_response
 from keyboards import (
     get_main_reply_keyboard,
@@ -19,24 +19,30 @@ from keyboards import (
 logger = logging.getLogger(__name__)
 
 
-async def ensure_chat_id(event: MessageCreated, bot: Bot) -> None:
-    """Сохраняет chat_id из события"""
-    chat_id = get_chat_id_from_event(event)
-    if not chat_id:
-        logger.warning("Не удалось получить chat_id")
-        return
-    
-    if state.chat_id != chat_id:
-        state.chat_id = chat_id
-        save_chat_id(state.chat_id)
-        logger.info(f"Сохранён chat_id: {state.chat_id}")
+def get_chat_id(event) -> int | None:
+    """Получает chat_id из события"""
+    # Прямой доступ из лога: event.chat.chat_id
+    if hasattr(event, 'chat') and hasattr(event.chat, 'chat_id'):
+        return event.chat.chat_id
+    # Альтернативный способ
+    if hasattr(event, 'chat_id'):
+        return event.chat_id
+    # Для BotStarted
+    if hasattr(event, 'chat_id'):
+        return event.chat_id
+    logger.warning(f"Не удалось получить chat_id из {type(event)}")
+    return None
 
 
 def register_handlers(dp: Dispatcher, bot: Bot):
     
     @dp.bot_started()
     async def on_bot_started(event: BotStarted):
-        chat_id = event.chat_id
+        chat_id = get_chat_id(event)
+        if not chat_id:
+            logger.warning("Не удалось получить chat_id в on_bot_started")
+            return
+        
         state.chat_id = chat_id
         save_chat_id(chat_id)
         await bot.send_message(
@@ -47,8 +53,13 @@ def register_handlers(dp: Dispatcher, bot: Bot):
 
     @dp.message_created(Command('start'))
     async def cmd_start(event: MessageCreated):
-        await ensure_chat_id(event, bot)
-        chat_id = get_chat_id_from_event(event)
+        chat_id = get_chat_id(event)
+        if not chat_id:
+            logger.warning("Не удалось получить chat_id в /start")
+            return
+        
+        state.chat_id = chat_id
+        save_chat_id(chat_id)
         
         await bot.send_message(
             chat_id=chat_id,
@@ -70,9 +81,9 @@ def register_handlers(dp: Dispatcher, bot: Bot):
 
     @dp.message_created(Command('menu'))
     async def cmd_menu(event: MessageCreated):
-        """Показывает reply-клавиатуру"""
-        chat_id = get_chat_id_from_event(event)
+        chat_id = get_chat_id(event)
         if not chat_id:
+            logger.warning("Не удалось получить chat_id в /menu")
             return
         
         keyboard = get_main_reply_keyboard()
@@ -86,9 +97,9 @@ def register_handlers(dp: Dispatcher, bot: Bot):
 
     @dp.message_created(Command('hide_menu'))
     async def cmd_hide_menu(event: MessageCreated):
-        """Скрывает клавиатуру"""
-        chat_id = get_chat_id_from_event(event)
+        chat_id = get_chat_id(event)
         if not chat_id:
+            logger.warning("Не удалось получить chat_id в /hide_menu")
             return
         
         await bot.send_message(
@@ -100,19 +111,27 @@ def register_handlers(dp: Dispatcher, bot: Bot):
 
     @dp.message_created(Command('test'))
     async def cmd_test(event: MessageCreated):
-        chat_id = get_chat_id_from_event(event)
+        chat_id = get_chat_id(event)
+        if not chat_id:
+            logger.warning("Не удалось получить chat_id в /test")
+            return
+        
         try:
             messages = load_messages()
             test_text = random.choice(messages)
             await bot.send_message(chat_id=chat_id, text=f"🧪 Тест:\n\n{test_text}")
             logger.debug(f"Тест отправлен в чат {chat_id}")
         except Exception as e:
-            await bot.send_message(chat_id=chat_id, text=f"❌ Ошибка: {e}")
             logger.error(f"Ошибка в /test: {e}")
+            await bot.send_message(chat_id=chat_id, text=f"❌ Ошибка: {e}")
 
     @dp.message_created(Command('add'))
     async def cmd_add(event: MessageCreated):
-        chat_id = get_chat_id_from_event(event)
+        chat_id = get_chat_id(event)
+        if not chat_id:
+            logger.warning("Не удалось получить chat_id в /add")
+            return
+        
         text = event.message.body.text if event.message.body else ''
         parts = text.split(maxsplit=1)
         
@@ -127,7 +146,11 @@ def register_handlers(dp: Dispatcher, bot: Bot):
 
     @dp.message_created(Command('list'))
     async def cmd_list(event: MessageCreated):
-        chat_id = get_chat_id_from_event(event)
+        chat_id = get_chat_id(event)
+        if not chat_id:
+            logger.warning("Не удалось получить chat_id в /list")
+            return
+        
         try:
             messages = load_messages()
             if not messages:
@@ -143,11 +166,16 @@ def register_handlers(dp: Dispatcher, bot: Bot):
             else:
                 await bot.send_message(chat_id=chat_id, text=list_text, parse_mode="markdown")
         except Exception as e:
+            logger.error(f"Ошибка в /list: {e}")
             await bot.send_message(chat_id=chat_id, text=f"❌ Ошибка: {e}")
 
     @dp.message_created(Command('stats'))
     async def cmd_stats(event: MessageCreated):
-        chat_id = get_chat_id_from_event(event)
+        chat_id = get_chat_id(event)
+        if not chat_id:
+            logger.warning("Не удалось получить chat_id в /stats")
+            return
+        
         try:
             messages = load_messages()
             total = len(messages)
@@ -166,17 +194,25 @@ def register_handlers(dp: Dispatcher, bot: Bot):
             )
             await bot.send_message(chat_id=chat_id, text=stats_text, parse_mode="markdown")
         except Exception as e:
+            logger.error(f"Ошибка в /stats: {e}")
             await bot.send_message(chat_id=chat_id, text=f"❌ Ошибка: {e}")
 
     @dp.message_created(Command('time'))
     async def cmd_time(event: MessageCreated):
-        chat_id = get_chat_id_from_event(event)
+        chat_id = get_chat_id(event)
+        if not chat_id:
+            logger.warning("Не удалось получить chat_id в /time")
+            return
+        
         now = datetime.now(MY_TIMEZONE)
         await bot.send_message(chat_id=chat_id, text=f"🕐 {now.strftime('%H:%M:%S %d.%m.%Y')}")
 
     @dp.message_created(Command('reload'))
     async def cmd_reload(event: MessageCreated):
-        chat_id = get_chat_id_from_event(event)
+        chat_id = get_chat_id(event)
+        if not chat_id:
+            logger.warning("Не удалось получить chat_id в /reload")
+            return
         
         if state.chat_id is not None and chat_id != state.chat_id:
             await bot.send_message(chat_id=chat_id, text="❌ У вас нет прав для этой команды.")
@@ -206,14 +242,17 @@ def register_handlers(dp: Dispatcher, bot: Bot):
             for keyword in keywords:
                 if keyword.lower() in text_lower:
                     logger.info(f"Сработало ключевое слово '{keyword}'")
-                    await send_keyword_response(event, response)
+                    await send_keyword_response(event, response, bot)
                     return
 
     # ===== ОБРАБОТЧИК REPLY-КНОПОК =====
     @dp.message_created()
     async def handle_reply_buttons(event: MessageCreated):
         text = event.message.body.text if event.message.body else ''
-        chat_id = get_chat_id_from_event(event)
+        chat_id = get_chat_id(event)
+        
+        if not chat_id:
+            return
         
         action = get_action_for_button(text)
         if action is None:
@@ -254,5 +293,6 @@ def register_handlers(dp: Dispatcher, bot: Bot):
         text = event.message.body.text if event.message.body else ''
         known_commands = ['/start', '/test', '/add', '/list', '/stats', '/time', '/reload', '/menu', '/hide_menu']
         if text and text.startswith('/') and text not in known_commands:
-            chat_id = get_chat_id_from_event(event)
-            await bot.send_message(chat_id=chat_id, text="❓ Неизвестная команда. Напишите /start для списка команд.")
+            chat_id = get_chat_id(event)
+            if chat_id:
+                await bot.send_message(chat_id=chat_id, text="❓ Неизвестная команда. Напишите /start для списка команд.")
