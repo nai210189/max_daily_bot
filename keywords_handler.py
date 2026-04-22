@@ -3,6 +3,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from maxapi.types import MessageCreated
 from config import KEYWORDS_FILE
 
 logger = logging.getLogger(__name__)
