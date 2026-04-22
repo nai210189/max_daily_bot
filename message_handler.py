@@ -103,7 +103,7 @@ def register_handlers(dp: Dispatcher, bot: Bot):
         )
         logger.info(f"Меню показано в чате {chat_id}")
 
-   @dp.message_created(Command('hide_menu'))
+    @dp.message_created(Command('hide_menu'))
     async def cmd_hide_menu(event: MessageCreated):
         chat_id = get_chat_id(event)
         if not chat_id:
