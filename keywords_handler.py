@@ -6,6 +6,8 @@ from typing import Any
 from maxapi.types import MessageCreated
 from config import KEYWORDS_FILE
 
+from utils import get_chat_id_from_event
+
 logger = logging.getLogger(__name__)
 
 
@@ -94,36 +96,27 @@ def reload_keywords_config() -> list[dict[str, Any]]:
     return _keywords_cache
 
 
-async def send_keyword_response(event: MessageCreated, response: dict[str, Any]) -> None:
+async def send_keyword_response(event: MessageCreated, response: dict[str, Any], bot) -> None:
     """
     Отправляет ответ пользователю (текст или картинку).
     """
     response_type = response.get("type", "text")
     content = response.get("content", "")
     caption = response.get("caption", "")
+    chat_id = get_chat_id_from_event(event)
     
     try:
         if response_type == "text":
-            await event.message.answer(content)
+            await bot.send_message(chat_id=chat_id, text=content)
             logger.debug(f"Отправлен текстовый ответ: {content[:50]}...")
-            
         elif response_type == "image":
             if content.startswith(('http://', 'https://')):
-                await event.message.answer_photo(photo=content, caption=caption)
+                await bot.send_photo(chat_id=chat_id, photo=content, caption=caption)
                 logger.info(f"Отправлена картинка по URL: {content}")
             else:
-                image_path = Path(content)
-                if not image_path.exists():
-                    logger.warning(f"Файл картинки не найден: {image_path}")
-                    await event.message.answer(caption or "❌ Изображение временно недоступно")
-                    return
-                with open(image_path, 'rb') as img_file:
-                    await event.message.answer_photo(photo=img_file, caption=caption)
-                logger.info(f"Отправлена локальная картинка: {image_path}")
+                logger.warning(f"Локальные картинки требуют дополнительной настройки: {content}")
+                await bot.send_message(chat_id=chat_id, text=caption or "❌ Изображение временно недоступно")
         else:
-            await event.message.answer(content)
-            logger.warning(f"Неизвестный тип ответа '{response_type}'")
-            
+            await bot.send_message(chat_id=chat_id, text=content)
     except Exception as e:
         logger.error(f"Ошибка при отправке ответа: {e}")
-        await event.message.answer(caption or content or "❌ Произошла ошибка при отправке ответа")
