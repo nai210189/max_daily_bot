@@ -18,4 +18,4 @@ KEYWORDS_FILE: Final[Path] = Path("keywords.json")
 
 # ===== ВРЕМЯ ОТПРАВКИ =====
 SEND_HOUR = 9
-SEND_MINUTE = 15
+SEND_MINUTE = 40
