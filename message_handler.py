@@ -1,3 +1,10 @@
+from keyboards import (
+    get_main_reply_keyboard, 
+    get_remove_keyboard, 
+    get_action_for_button,
+    get_admin_reply_keyboard,
+    get_simple_reply_keyboard
+)
 import logging
 import random
 from datetime import datetime
@@ -29,6 +36,47 @@ async def ensure_chat_id(event: MessageCreated) -> None:
 
 
 def register_handlers(dp):
+    
+    @dp.message_created(Command('menu'))
+    async def cmd_menu(event: MessageCreated):
+        """
+        Показывает главное меню (reply-клавиатуру)
+        """
+        # Проверяем, администратор ли пользователь
+        chat_id = event.chat_id if hasattr(event, 'chat_id') else None
+        is_admin = (state.chat_id == chat_id)  # Тот, кто активировал бота
+        
+        if is_admin:
+            keyboard = get_admin_reply_keyboard()
+            await event.message.answer(
+                "🔧 **Панель управления ботом**\n\n"
+                "Нажмите на кнопку для выполнения действия:",
+                reply_markup=keyboard,
+                parse_mode="markdown"
+            )
+        else:
+            keyboard = get_main_reply_keyboard()
+            await event.message.answer(
+                "🔧 **Быстрое меню**\n\n"
+                "Нажмите на кнопку для выполнения действия:",
+                reply_markup=keyboard,
+                parse_mode="markdown"
+            )
+        
+        logger.info(f"Меню показано в чате {chat_id}")
+    
+    
+    @dp.message_created(Command('hide_menu'))
+    async def cmd_hide_menu(event: MessageCreated):
+        """
+        Скрывает reply-клавиатуру
+        """
+        keyboard = get_remove_keyboard()
+        await event.message.answer(
+            "✅ Клавиатура скрыта. Отправьте /menu чтобы показать снова.",
+            reply_markup=keyboard
+        )
+        logger.info(f"Клавиатура скрыта в чате {event.chat_id if hasattr(event, 'chat_id') else 'unknown'}")
     
     @dp.bot_started()
     async def on_bot_started(event: BotStarted):
@@ -151,7 +199,107 @@ def register_handlers(dp):
         except Exception as e:
             await event.message.answer(f"❌ Ошибка при перезагрузке: {e}")
 
+    @dp.message_created(Command('next'))
+    async def cmd_next(event: MessageCreated):
+        """Показывает время следующей запланированной отправки"""
+        from scheduler import get_next_run_time
+        
+        next_time = get_next_run_time()
+        now = datetime.now(MY_TIMEZONE)
+        wait_minutes = int((next_time - now).total_seconds() / 60)
+        
+        await event.message.answer(
+            f"⏰ **Следующая отправка:**\n\n"
+            f"• Время: {next_time.strftime('%H:%M:%S %d.%m.%Y')}\n"
+            f"• Через: {wait_minutes} минут\n"
+            f"• Часовой пояс: {MY_TIMEZONE}",
+            parse_mode="markdown"
+        )
+    
     @dp.message_created()
+    async def handle_reply_buttons(event: MessageCreated):
+        """
+        Обрабатывает нажатия на reply-кнопки (приходят как обычные сообщения)
+        """
+        # Получаем текст сообщения
+        text = event.message.body.text if event.message.body else ''
+        
+        # Проверяем, является ли сообщение нажатием на кнопку
+        action = get_action_for_button(text)
+        
+        if action is None:
+            return  # Не кнопка, выходим
+        
+        logger.info(f"Нажата reply-кнопка: '{text}' -> действие: {action}")
+        
+        # Обрабатываем действия
+        if action.startswith('/'):
+            # Это команда — можно вызвать соответствующий обработчик
+            # Но проще отправить команду как текст и позволить другим обработчикам сработать
+            # Однако, чтобы не было цикла, лучше вызвать напрямую
+            
+            if action == '/stats':
+                await cmd_stats(event)
+            elif action == '/list':
+                await cmd_list(event)
+            elif action == '/test':
+                await cmd_test(event)
+            elif action == '/time':
+                await cmd_time(event)
+            elif action == '/reload':
+                await cmd_reload(event)
+            elif action == '/next':
+                # Временно создадим обработчик /next или вызовем существующий
+                await cmd_next(event)  # Нужно добавить команду /next
+            else:
+                # Если команда не распознана, отправляем как текст
+                # Это вызовет обычный поток обработки сообщений
+                # Но будьте осторожны — может быть бесконечный цикл
+                pass
+        
+        elif action == "action_add":
+            # Запрашиваем текст для добавления
+            await event.message.answer(
+                "✏️ Введите текст нового сообщения:",
+                reply_markup=get_simple_reply_keyboard()
+            )
+            # Здесь можно установить состояние ожидания ввода (FSM)
+            # Для простоты пока просто просим ввести текст
+        
+        elif action == "action_clear":
+            # Запрашиваем подтверждение очистки
+            await event.message.answer(
+                "⚠️ **Внимание!** Вы уверены, что хотите очистить базу сообщений?\n\n"
+                "Это действие нельзя отменить.",
+                reply_markup=get_simple_reply_keyboard(),
+                parse_mode="markdown"
+            )
+        
+        elif action == "action_confirm_yes":
+            # Подтверждение очистки
+            try:
+                # Очищаем файл messages.txt
+                with open(MESSAGES_FILE, 'w', encoding='utf-8') as f:
+                    f.write("")
+                await event.message.answer(
+                    "✅ База сообщений очищена!",
+                    reply_markup=get_remove_keyboard()
+                )
+                logger.info(f"База сообщений очищена пользователем {event.chat_id}")
+            except Exception as e:
+                await event.message.answer(f"❌ Ошибка при очистке: {e}")
+        
+        elif action == "action_confirm_no":
+            # Отмена действия
+            await event.message.answer(
+                "❌ Действие отменено.",
+                reply_markup=get_remove_keyboard()
+            )
+        
+        elif action == "action_close":
+            # Скрываем клавиатуру
+            await cmd_hide_menu(event)
+    
     async def handle_keywords(event: MessageCreated):
         """Отвечает на сообщения по ключевым словам"""
         # Получаем текст
