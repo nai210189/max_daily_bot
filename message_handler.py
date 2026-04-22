@@ -33,13 +33,18 @@ def register_handlers(dp):
     
     @dp.message_created()
     async def debug_all_messages(event: MessageCreated):
-        """Отладочный обработчик — логирует все сообщения"""
-        # ✅ Правильный способ получить chat_id
-        chat_id = event.chat_id if hasattr(event, 'chat_id') else 'no chat_id'
-        text = event.message.text if hasattr(event.message, 'text') else 'no text'
-        logger.info(f"🔍 ПОЛУЧЕНО СООБЩЕНИЕ! chat_id={chat_id}, текст={text[:50]}")
+        """Отладочный обработчик"""
+        # ✅ Самый вероятный правильный способ
+        if hasattr(event.message, 'body') and hasattr(event.message.body, 'text'):
+            text = event.message.body.text
+        elif hasattr(event.message, 'text'):
+            text = event.message.text
+        else:
+            text = "текст не найден"
         
-        # Отправляем эхо для проверки
+        chat_id = event.chat_id if hasattr(event, 'chat_id') else 'unknown'
+        
+        logger.info(f"🔍 ПОЛУЧЕНО: chat_id={chat_id}, текст={text}")
         await event.message.answer(f"Эхо: {text}")
     
     @dp.bot_started()
@@ -159,11 +164,16 @@ def register_handlers(dp):
         except Exception as e:
             await event.message.answer(f"❌ Ошибка при перезагрузке: {e}")
 
-    @dp.message_created(F.message.text)
+    @dp.message_created(F.message.text)  # или без фильтра
     async def handle_keywords(event: MessageCreated):
         """Отвечает на сообщения по ключевым словам"""
-        # Получаем текст
-        text = event.message.text if hasattr(event.message, 'text') else ''
+        
+        # Получаем текст (используйте тот способ, который сработал)
+        if hasattr(event.message, 'body') and hasattr(event.message.body, 'text'):
+            text = event.message.body.text
+        else:
+            text = getattr(event.message, 'text', '')
+        
         text_lower = text.lower().strip()
         
         # Игнорируем команды
@@ -174,7 +184,6 @@ def register_handlers(dp):
         if len(text_lower) > 100:
             return
         
-        # ✅ Правильный способ получить chat_id
         chat_id = event.chat_id if hasattr(event, 'chat_id') else 'unknown'
         
         # Загружаем конфигурацию
