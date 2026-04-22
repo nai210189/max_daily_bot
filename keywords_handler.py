@@ -100,6 +100,8 @@ async def send_keyword_response(event: MessageCreated, response: dict[str, Any],
     """
     Отправляет ответ пользователю (текст или картинку).
     """
+    from utils import get_chat_id_from_event
+    
     response_type = response.get("type", "text")
     content = response.get("content", "")
     caption = response.get("caption", "")
@@ -114,7 +116,7 @@ async def send_keyword_response(event: MessageCreated, response: dict[str, Any],
                 await bot.send_photo(chat_id=chat_id, photo=content, caption=caption)
                 logger.info(f"Отправлена картинка по URL: {content}")
             else:
-                logger.warning(f"Локальные картинки требуют дополнительной настройки: {content}")
+                logger.warning(f"Локальные картинки не поддерживаются: {content}")
                 await bot.send_message(chat_id=chat_id, text=caption or "❌ Изображение временно недоступно")
         else:
             await bot.send_message(chat_id=chat_id, text=content)
