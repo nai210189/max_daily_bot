@@ -4,8 +4,7 @@ from datetime import datetime, timedelta
 
 from config import MY_TIMEZONE, SEND_HOUR, SEND_MINUTE
 from bot_state import state
-from utils import load_messages
-from maxapi import Bot
+from db import get_random_message_db
 
 logger = logging.getLogger(__name__)
 
@@ -19,15 +18,21 @@ def get_next_run_time() -> datetime:
     return target
 
 
-async def send_daily_message(bot: Bot) -> None:
-    """Отправляет случайное сообщение в нужный чат"""
+async def send_daily_message(bot) -> None:
+    """Отправляет случайное сообщение из БД"""
     if state.chat_id is None:
         logger.warning("Чат не установлен. Бот никому не отправит сообщение.")
         return
     
     try:
-        messages = load_messages()
-        daily_text = random.choice(messages)  # import random нужен вверху
+        daily_text = await get_random_message_db()
+        if not daily_text:
+            logger.warning("Нет сообщений в базе данных")
+            await bot.send_message(
+                chat_id=state.chat_id,
+                text="⚠️ База сообщений пуста! Добавьте сообщения через /add"
+            )
+            return
         
         await bot.send_message(chat_id=state.chat_id, text=daily_text)
         logger.info(f"Сообщение отправлено в чат {state.chat_id}: {daily_text[:50]}...")
@@ -39,25 +44,22 @@ async def send_daily_message(bot: Bot) -> None:
             logger.error(f"Ошибка при отправке: {e}", exc_info=True)
 
 
-async def daily_scheduler(bot: Bot) -> None:
+async def daily_scheduler(bot) -> None:
     """Планировщик отправки сообщений"""
-    import random  # локальный импорт для избежания циклических зависимостей
-    
     while True:
         target = get_next_run_time()
         now_utc = datetime.now()
         wait_seconds = (target.astimezone() - now_utc).total_seconds()
         
-        wait_delta = timedelta(seconds=wait_seconds)
-        hours = wait_delta.seconds // 3600
-        minutes = (wait_delta.seconds % 3600) // 60
-        
-        logger.info(f"Следующая отправка через {hours}ч {minutes}мин (в {target.strftime('%H:%M %d.%m.%Y')})")
-        
-        try:
-            await asyncio.sleep(wait_seconds)
-        except asyncio.CancelledError:
-            logger.info("Планировщик остановлен")
-            break
+        if wait_seconds > 0:
+            hours = int(wait_seconds // 3600)
+            minutes = int((wait_seconds % 3600) // 60)
+            logger.info(f"Следующая отправка через {hours}ч {minutes}мин (в {target.strftime('%H:%M %d.%m.%Y')})")
+            
+            try:
+                await asyncio.sleep(wait_seconds)
+            except asyncio.CancelledError:
+                logger.info("Планировщик остановлен")
+                break
         
         await send_daily_message(bot)
