@@ -1,57 +1,21 @@
-import asyncio
-import logging
+import os
+from pathlib import Path
+from typing import Final
+from zoneinfo import ZoneInfo
 
-from maxapi import Bot, Dispatcher
+# ===== ТОКЕН БОТА =====
+BOT_TOKEN: Final[str | None] = os.getenv("BOT_TOKEN")
+if not BOT_TOKEN:
+    raise ValueError("BOT_TOKEN не найден! Установите переменную окружения BOT_TOKEN")
 
-from config import BOT_TOKEN
-from bot_state import state
-from utils import load_saved_chat_id
-from scheduler import daily_scheduler
-from message_handler import register_handlers
+# ===== ЧАСОВОЙ ПОЯС =====
+MY_TIMEZONE = ZoneInfo("Asia/Krasnoyarsk")
 
-# Настройка логирования
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S"
-)
-logger = logging.getLogger(__name__)
+# ===== ФАЙЛЫ =====
+MESSAGES_FILE: Final[Path] = Path("messages.txt")
+CHAT_ID_FILE: Final[Path] = Path("chat_id.txt")
+KEYWORDS_FILE: Final[Path] = Path("keywords.json")
 
-# Создаём бота и диспетчера
-bot = Bot(token=BOT_TOKEN)
-dp = Dispatcher()
-
-
-async def main():
-    """Главная функция запуска"""
-    logger.info("🚀 Запуск ежедневного бота...")
-    
-    # Регистрируем обработчики команд
-    register_handlers(dp)
-    
-    # Восстанавливаем сохранённый chat_id
-    saved_id = load_saved_chat_id()
-    if saved_id:
-        state.chat_id = saved_id
-        logger.info(f"Восстановлен chat_id: {state.chat_id}")
-    
-    # Запускаем планировщик
-    scheduler_task = asyncio.create_task(daily_scheduler(bot))
-    
-    await bot.delete_webhook()
-    
-    try:
-        await dp.start_polling(bot)
-    finally:
-        scheduler_task.cancel()
-        await asyncio.gather(scheduler_task, return_exceptions=True)
-        logger.info("Бот остановлен")
-
-
-if __name__ == '__main__':
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        logger.info("👋 Бот остановлен пользователем")
-    except Exception as e:
-        logger.error(f"Критическая ошибка: {e}", exc_info=True)
+# ===== ВРЕМЯ ОТПРАВКИ =====
+SEND_HOUR = 12
+SEND_MINUTE = 30
