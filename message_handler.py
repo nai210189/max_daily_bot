@@ -111,7 +111,7 @@ def register_handlers(dp: Dispatcher, bot: Bot):
             return
         
         try:
-            messages = load_messages()
+            messages = await load_messages()
             test_text = random.choice(messages)
             await bot.send_message(chat_id=chat_id, text=f"🧪 Тест:\n\n{test_text}")
             logger.debug(f"Тест отправлен в чат {chat_id}")
@@ -134,7 +134,7 @@ def register_handlers(dp: Dispatcher, bot: Bot):
             return
         
         new_message = parts[1].strip()
-        add_message(new_message)
+        await add_message(new_message)
         await bot.send_message(chat_id=chat_id, text=f"✅ Добавлено:\n\n{new_message}")
         logger.info(f"Добавлено сообщение: {new_message[:50]}...")
 
@@ -146,7 +146,7 @@ def register_handlers(dp: Dispatcher, bot: Bot):
             return
         
         try:
-            messages = load_messages()
+            messages = await load_messages()
             if not messages:
                 await bot.send_message(chat_id=chat_id, text="📭 База пуста.")
                 return
@@ -171,8 +171,8 @@ def register_handlers(dp: Dispatcher, bot: Bot):
             return
         
         try:
-            messages = load_messages()
-            total = len(messages)
+            messages = await load_messages()
+            total = await get_messages_count()
             avg_len = sum(len(m) for m in messages) // total if total else 0
             size_kb = MESSAGES_FILE.stat().st_size / 1024
             keywords_count = len(get_keywords_config())
