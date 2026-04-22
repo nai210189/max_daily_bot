@@ -93,7 +93,7 @@ def reload_keywords_config() -> list[dict[str, Any]]:
     return _keywords_cache
 
 
-async def send_keyword_response(event, response: dict[str, Any]) -> None:
+async def send_keyword_response(event: MessageCreated, response: dict[str, Any]) -> None:
     """
     Отправляет ответ пользователю (текст или картинку).
     """
@@ -104,10 +104,12 @@ async def send_keyword_response(event, response: dict[str, Any]) -> None:
     try:
         if response_type == "text":
             await event.message.answer(content)
+            logger.debug(f"Отправлен текстовый ответ: {content[:50]}...")
             
         elif response_type == "image":
             if content.startswith(('http://', 'https://')):
                 await event.message.answer_photo(photo=content, caption=caption)
+                logger.info(f"Отправлена картинка по URL: {content}")
             else:
                 image_path = Path(content)
                 if not image_path.exists():
@@ -116,9 +118,11 @@ async def send_keyword_response(event, response: dict[str, Any]) -> None:
                     return
                 with open(image_path, 'rb') as img_file:
                     await event.message.answer_photo(photo=img_file, caption=caption)
+                logger.info(f"Отправлена локальная картинка: {image_path}")
         else:
             await event.message.answer(content)
+            logger.warning(f"Неизвестный тип ответа '{response_type}'")
             
     except Exception as e:
         logger.error(f"Ошибка при отправке ответа: {e}")
-        await event.message.answer(caption or content or "❌ Произошла ошибка")
+        await event.message.answer(caption or content or "❌ Произошла ошибка при отправке ответа")
