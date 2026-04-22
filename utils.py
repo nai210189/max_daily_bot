@@ -24,19 +24,12 @@ def load_saved_chat_id() -> int | None:
 
 
 def get_chat_id_from_event(event) -> int | None:
-    """
-    Универсальное получение chat_id из события.
-    """
-    # Вариант 1: через event.chat_id
+    """Получение chat_id из события"""
     if hasattr(event, 'chat_id'):
         return event.chat_id
-    
-    # Вариант 2: через event.message.recipient.chat_id
     if hasattr(event, 'message') and hasattr(event.message, 'recipient'):
         if hasattr(event.message.recipient, 'chat_id'):
             return event.message.recipient.chat_id
-    
-    logger.warning(f"Не удалось получить chat_id из {type(event)}")
     return None
 
 
