@@ -29,16 +29,6 @@ async def ensure_chat_id(event: MessageCreated) -> None:
 
 
 def register_handlers(dp):
-    """Регистрирует все обработчики команд"""
-    
-    @dp.message_created()
-    async def debug_all_messages(event: MessageCreated):
-        """Отладочный обработчик"""
-        chat_id = event.chat_id if hasattr(event, 'chat_id') else 'unknown'
-        text = event.message.body.text if hasattr(event.message, 'body') else 'no text'
-        
-        logger.info(f"🔍 ПОЛУЧЕНО: chat_id={chat_id}, текст={text}")
-        await event.message.answer(f"Эхо: {text}")
     
     @dp.bot_started()
     async def on_bot_started(event: BotStarted):
@@ -159,10 +149,10 @@ def register_handlers(dp):
         except Exception as e:
             await event.message.answer(f"❌ Ошибка при перезагрузке: {e}")
 
-    @dp.message_created(F.message.body.text)
+    @dp.message_created()
     async def handle_keywords(event: MessageCreated):
         """Отвечает на сообщения по ключевым словам"""
-        # ✅ Правильный способ получить текст
+        # Получаем текст
         text = event.message.body.text if event.message.body else ''
         text_lower = text.lower().strip()
         
@@ -187,7 +177,7 @@ def register_handlers(dp):
                 if keyword.lower() in text_lower:
                     logger.info(f"Сработало ключевое слово '{keyword}' в чате {chat_id}")
                     await send_keyword_response(event, response)
-                    return
+                    return  # Важно: после ответа выходим, чтобы не обрабатывать дальше
 
     @dp.message_created()
     async def handle_unknown(event: MessageCreated):
