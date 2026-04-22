@@ -145,35 +145,35 @@ def register_handlers(dp):
 
     @dp.message_created(F.message.body.text)
     async def handle_keywords(event: MessageCreated):
-    """
-    Отвечает на сообщения по ключевым словам из JSON файла.
-    """
-    # ✅ Правильный способ получить текст (из документации maxapi)
-    text = event.message.body.text if event.message.body else ''
-    text_lower = text.lower().strip()
-    
-    # Игнорируем команды
-    if text_lower.startswith('/'):
-        return
-    
-    # Игнорируем слишком длинные сообщения
-    if len(text_lower) > 100:
-        return
-    
-    # Загружаем конфигурацию
-    responses = get_keywords_config()
-    
-    # Ищем подходящий ответ
-    for response in responses:
-        keywords = response.get("keywords", [])
-        keywords_lower = [kw.lower() for kw in keywords]
+        """
+        Отвечает на сообщения по ключевым словам из JSON файла.
+        """
+        # ✅ Правильный способ получить текст (из документации maxapi)
+        text = event.message.body.text if event.message.body else ''
+        text_lower = text.lower().strip()
         
-        for keyword in keywords_lower:
-            if keyword in text_lower:
-                # ✅ chat_id берём из event (согласно документации)
-                logger.info(f"Сработало ключевое слово '{keyword}' в чате {event.chat_id}")
-                await send_keyword_response(event, response)
-                return
+        # Игнорируем команды
+        if text_lower.startswith('/'):
+            return
+        
+        # Игнорируем слишком длинные сообщения
+        if len(text_lower) > 100:
+            return
+        
+        # Загружаем конфигурацию
+        responses = get_keywords_config()
+        
+        # Ищем подходящий ответ
+        for response in responses:
+            keywords = response.get("keywords", [])
+            keywords_lower = [kw.lower() for kw in keywords]
+            
+            for keyword in keywords_lower:
+                if keyword in text_lower:
+                    # ✅ chat_id берём из event (согласно документации)
+                    logger.info(f"Сработало ключевое слово '{keyword}' в чате {event.chat_id}")
+                    await send_keyword_response(event, response)
+                    return
 
     @dp.message_created()
     async def handle_unknown(event: MessageCreated):
