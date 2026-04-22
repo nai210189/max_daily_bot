@@ -173,11 +173,11 @@ def register_handlers(dp: Dispatcher, bot: Bot):
     @dp.message_created(Command('stats'))
     async def cmd_stats(event: MessageCreated):
         """Статистика"""
-        chat_id = get_chat_id_from_event(event)
+        # Прямой доступ к chat_id
+        chat_id = event.chat_id if hasattr(event, 'chat_id') else None
         
-        # Проверка: если chat_id не получен, выходим
         if not chat_id:
-            logger.warning("Не удалось получить chat_id для команды /stats")
+            logger.warning(f"Не удалось получить chat_id. event: {event}")
             return
         
         try:
@@ -190,8 +190,6 @@ def register_handlers(dp: Dispatcher, bot: Bot):
             stats_text = (
                 f"📊 **Статистика**\n\n"
                 f"• Сообщений: {total}\n"
-                f"• Средняя длина: {avg_len} симв.\n"
-                f"• Размер файла: {size_kb:.1f} KB\n"
                 f"• Время отправки: {SEND_HOUR:02d}:{SEND_MINUTE:02d}\n"
                 f"• Ключевых слов: {keywords_count}\n"
                 f"• Чат: {'активирован' if state.chat_id else 'не активирован'}"
