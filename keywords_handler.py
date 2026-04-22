@@ -11,44 +11,38 @@ logger = logging.getLogger(__name__)
 
 
 def create_example_keywords_file() -> None:
-    """Создаёт пример файла keywords.json, если его нет"""
+    """Создаёт пример файла keywords.json"""
     example_config = {
         "responses": [
             {
                 "keywords": ["привет", "здравствуй", "добрый день"],
                 "type": "text",
-                "content": "👋 Здравствуйте! Чем могу помочь?",
-                "description": "Приветствие"
+                "content": "👋 Здравствуйте! Чем могу помочь?"
             },
             {
                 "keywords": ["пока", "до свидания", "всего хорошего"],
                 "type": "text",
-                "content": "До свидания! Хорошего дня! 👋",
-                "description": "Прощание"
+                "content": "До свидания! Хорошего дня! 👋"
             },
             {
                 "keywords": ["спасибо", "благодарю", "спс"],
                 "type": "text",
-                "content": "Пожалуйста! Всегда рад помочь! 👍",
-                "description": "Благодарность"
+                "content": "Пожалуйста! Всегда рад помочь! 👍"
             },
             {
                 "keywords": ["как дела", "как жизнь", "как ты"],
                 "type": "text",
-                "content": "Всё отлично! А у вас? 😊",
-                "description": "Вопрос о делах"
+                "content": "Всё отлично! А у вас? 😊"
             },
             {
                 "keywords": ["помощь", "команды", "help", "что умеешь"],
                 "type": "text",
-                "content": "📋 Напишите /start для списка всех команд",
-                "description": "Справка"
+                "content": "📋 Напишите /start для списка всех команд"
             },
             {
                 "keywords": ["бот", "ты бот", "кто ты"],
                 "type": "text",
-                "content": "Я бот для ежедневной рассылки полезных сообщений! 🤖",
-                "description": "Представление бота"
+                "content": "Я бот для ежедневной рассылки полезных сообщений! 🤖"
             }
         ]
     }
@@ -58,7 +52,7 @@ def create_example_keywords_file() -> None:
 
 
 def load_keywords_from_json() -> list[dict[str, Any]]:
-    """Загружает конфигурацию ключевых слов из JSON файла"""
+    """Загружает конфигурацию ключевых слов"""
     if not KEYWORDS_FILE.exists():
         create_example_keywords_file()
     
@@ -66,20 +60,16 @@ def load_keywords_from_json() -> list[dict[str, Any]]:
         with open(KEYWORDS_FILE, 'r', encoding='utf-8') as f:
             data = json.load(f)
             return data.get("responses", [])
-    except json.JSONDecodeError as e:
-        logger.error(f"Ошибка парсинга {KEYWORDS_FILE}: {e}")
-        return []
     except Exception as e:
         logger.error(f"Ошибка загрузки {KEYWORDS_FILE}: {e}")
         return []
 
 
-# Кэш для ключевых слов
 _keywords_cache: list[dict[str, Any]] | None = None
 
 
 def get_keywords_config() -> list[dict[str, Any]]:
-    """Возвращает конфигурацию ключевых слов с кэшированием"""
+    """Возвращает конфигурацию с кэшированием"""
     global _keywords_cache
     if _keywords_cache is None:
         _keywords_cache = load_keywords_from_json()
@@ -88,17 +78,15 @@ def get_keywords_config() -> list[dict[str, Any]]:
 
 
 def reload_keywords_config() -> list[dict[str, Any]]:
-    """Принудительно перезагружает конфигурацию из файла"""
+    """Перезагружает конфигурацию"""
     global _keywords_cache
     _keywords_cache = load_keywords_from_json()
-    logger.info(f"Ключевые слова перезагружены. Загружено {len(_keywords_cache)} наборов")
+    logger.info(f"Перезагружено {len(_keywords_cache)} наборов")
     return _keywords_cache
 
 
 async def send_keyword_response(event: MessageCreated, response: dict[str, Any], bot) -> None:
-    """
-    Отправляет ответ пользователю (текст или картинку).
-    """
+    """Отправляет ответ пользователю"""
     response_type = response.get("type", "text")
     content = response.get("content", "")
     caption = response.get("caption", "")
@@ -107,14 +95,11 @@ async def send_keyword_response(event: MessageCreated, response: dict[str, Any],
     try:
         if response_type == "text":
             await bot.send_message(chat_id=chat_id, text=content)
-            logger.debug(f"Отправлен текстовый ответ: {content[:50]}...")
         elif response_type == "image":
             if content.startswith(('http://', 'https://')):
                 await bot.send_photo(chat_id=chat_id, photo=content, caption=caption)
-                logger.info(f"Отправлена картинка по URL: {content}")
             else:
-                logger.warning(f"Локальные картинки не поддерживаются: {content}")
-                await bot.send_message(chat_id=chat_id, text=caption or "❌ Изображение временно недоступно")
+                await bot.send_message(chat_id=chat_id, text=caption or "❌ Изображение недоступно")
         else:
             await bot.send_message(chat_id=chat_id, text=content)
     except Exception as e:
