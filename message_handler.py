@@ -148,7 +148,7 @@ def register_handlers(dp):
         except Exception as e:
             await event.message.answer(f"❌ Ошибка при перезагрузке: {e}")
 
-    @dp.message_created(F.message.body.text)
+    @dp.message_created(F.message.text)
     async def handle_keywords(event: MessageCreated):
         """Отвечает на сообщения по ключевым словам"""
         # Получаем текст
