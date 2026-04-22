@@ -171,7 +171,7 @@ def register_handlers(dp):
             for keyword in keywords_lower:
                 if keyword in text_lower:
                     # ✅ chat_id берём из event (согласно документации)
-                    logger.info(f"Сработало ключевое слово '{keyword}' в чате {event.chat_id}")
+                    logger.info(f"Ключевое слово в чате {event.message.chat_id}")
                     await send_keyword_response(event, response)
                     return
 
