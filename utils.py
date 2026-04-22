@@ -5,7 +5,8 @@ from pathlib import Path
 from config import CHAT_ID_FILE, MESSAGES_FILE
 
 logger = logging.getLogger(__name__)
-    
+
+
 # ===== РАБОТА С CHAT_ID =====
 def save_chat_id(chat_id: int) -> None:
     """Сохраняет chat_id в файл"""
@@ -19,6 +20,23 @@ def load_saved_chat_id() -> int | None:
             return int(CHAT_ID_FILE.read_text(encoding='utf-8').strip())
         except (ValueError, OSError):
             logger.warning("Не удалось прочитать сохранённый chat_id")
+    return None
+
+
+def get_chat_id_from_event(event) -> int | None:
+    """
+    Универсальное получение chat_id из события.
+    """
+    # Вариант 1: через event.chat_id
+    if hasattr(event, 'chat_id'):
+        return event.chat_id
+    
+    # Вариант 2: через event.message.recipient.chat_id
+    if hasattr(event, 'message') and hasattr(event.message, 'recipient'):
+        if hasattr(event.message.recipient, 'chat_id'):
+            return event.message.recipient.chat_id
+    
+    logger.warning(f"Не удалось получить chat_id из {type(event)}")
     return None
 
 
@@ -45,26 +63,9 @@ def load_messages() -> list[str]:
     messages = [line.strip() for line in content.splitlines() if line.strip()]
     
     if not messages:
-        raise ValueError(f"Файл {MESSAGES_FILE} пуст! Добавьте хотя бы одно сообщение.")
+        raise ValueError(f"Файл {MESSAGES_FILE} пуст!")
     
     return messages
-
-
-# ===== ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ ПОЛУЧЕНИЯ CHAT_ID =====
-def get_chat_id_from_event(event) -> int | None:
-    """
-    Получение chat_id из события.
-    """
-    # Прямой доступ - самый надёжный способ
-    if hasattr(event, 'chat_id'):
-        return event.chat_id
-    
-    # Через recipient
-    if hasattr(event, 'message') and hasattr(event.message, 'recipient'):
-        if hasattr(event.message.recipient, 'chat_id'):
-            return event.message.recipient.chat_id
-    
-    return None
 
 
 def add_message(text: str) -> None:
