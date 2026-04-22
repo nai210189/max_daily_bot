@@ -42,6 +42,11 @@ def register_handlers(dp: Dispatcher, bot: Bot):
     @dp.message_created(Command('start'))
     async def cmd_start(event: MessageCreated):
         chat_id = get_chat_id_from_event(event)
+        
+        if not chat_id:
+            logger.warning("Не удалось получить chat_id для команды /start")
+            return
+        
         if chat_id:
             state.chat_id = chat_id
             save_chat_id(chat_id)
@@ -67,7 +72,9 @@ def register_handlers(dp: Dispatcher, bot: Bot):
     async def cmd_menu(event: MessageCreated):
         """Показывает reply-клавиатуру"""
         chat_id = get_chat_id_from_event(event)
+        
         if not chat_id:
+            logger.warning("Не удалось получить chat_id для команды /menu")
             return
         
         keyboard = get_main_reply_keyboard()
@@ -83,7 +90,9 @@ def register_handlers(dp: Dispatcher, bot: Bot):
     async def cmd_hide_menu(event: MessageCreated):
         """Скрывает клавиатуру"""
         chat_id = get_chat_id_from_event(event)
+        
         if not chat_id:
+            logger.warning("Не удалось получить chat_id для команды /hide_menu")
             return
         
         await bot.send_message(
@@ -97,19 +106,30 @@ def register_handlers(dp: Dispatcher, bot: Bot):
     async def cmd_test(event: MessageCreated):
         """Тестовое сообщение"""
         chat_id = get_chat_id_from_event(event)
+        
+        if not chat_id:
+            logger.warning("Не удалось получить chat_id для команды /test")
+            return
+        
         try:
             messages = load_messages()
             test_text = random.choice(messages)
             await bot.send_message(chat_id=chat_id, text=f"🧪 Тест:\n\n{test_text}")
             logger.debug(f"Тест отправлен в чат {chat_id}")
         except Exception as e:
-            await bot.send_message(chat_id=chat_id, text=f"❌ Ошибка: {e}")
             logger.error(f"Ошибка в /test: {e}")
+            if chat_id:
+                await bot.send_message(chat_id=chat_id, text=f"❌ Ошибка: {e}")
     
     @dp.message_created(Command('add'))
     async def cmd_add(event: MessageCreated):
         """Добавляет сообщение в базу"""
         chat_id = get_chat_id_from_event(event)
+        
+        if not chat_id:
+            logger.warning("Не удалось получить chat_id для команды /add")
+            return
+        
         text = event.message.body.text if event.message.body else ''
         parts = text.split(maxsplit=1)
         
@@ -126,6 +146,11 @@ def register_handlers(dp: Dispatcher, bot: Bot):
     async def cmd_list(event: MessageCreated):
         """Список сообщений"""
         chat_id = get_chat_id_from_event(event)
+        
+        if not chat_id:
+            logger.warning("Не удалось получить chat_id для команды /list")
+            return
+        
         try:
             messages = load_messages()
             if not messages:
@@ -141,12 +166,20 @@ def register_handlers(dp: Dispatcher, bot: Bot):
             else:
                 await bot.send_message(chat_id=chat_id, text=list_text, parse_mode="markdown")
         except Exception as e:
-            await bot.send_message(chat_id=chat_id, text=f"❌ Ошибка: {e}")
+            logger.error(f"Ошибка в /list: {e}")
+            if chat_id:
+                await bot.send_message(chat_id=chat_id, text=f"❌ Ошибка: {e}")
     
     @dp.message_created(Command('stats'))
     async def cmd_stats(event: MessageCreated):
         """Статистика"""
         chat_id = get_chat_id_from_event(event)
+        
+        # Проверка: если chat_id не получен, выходим
+        if not chat_id:
+            logger.warning("Не удалось получить chat_id для команды /stats")
+            return
+        
         try:
             messages = load_messages()
             total = len(messages)
@@ -165,12 +198,19 @@ def register_handlers(dp: Dispatcher, bot: Bot):
             )
             await bot.send_message(chat_id=chat_id, text=stats_text, parse_mode="markdown")
         except Exception as e:
-            await bot.send_message(chat_id=chat_id, text=f"❌ Ошибка: {e}")
+            logger.error(f"Ошибка в /stats: {e}")
+            if chat_id:
+                await bot.send_message(chat_id=chat_id, text=f"❌ Ошибка: {e}")
     
     @dp.message_created(Command('time'))
     async def cmd_time(event: MessageCreated):
         """Текущее время"""
         chat_id = get_chat_id_from_event(event)
+        
+        if not chat_id:
+            logger.warning("Не удалось получить chat_id для команды /time")
+            return
+        
         now = datetime.now(MY_TIMEZONE)
         await bot.send_message(chat_id=chat_id, text=f"🕐 {now.strftime('%H:%M:%S %d.%m.%Y')} (по вашему времени)")
     
@@ -178,6 +218,11 @@ def register_handlers(dp: Dispatcher, bot: Bot):
     async def cmd_next(event: MessageCreated):
         """Следующая отправка"""
         chat_id = get_chat_id_from_event(event)
+        
+        if not chat_id:
+            logger.warning("Не удалось получить chat_id для команды /next")
+            return
+        
         next_time = get_next_run_time()
         now = datetime.now(MY_TIMEZONE)
         wait_minutes = int((next_time - now).total_seconds() / 60)
@@ -194,6 +239,10 @@ def register_handlers(dp: Dispatcher, bot: Bot):
     async def cmd_reload(event: MessageCreated):
         """Перезагружает ключевые слова"""
         chat_id = get_chat_id_from_event(event)
+        
+        if not chat_id:
+            logger.warning("Не удалось получить chat_id для команды /reload")
+            return
         
         if state.chat_id is not None and chat_id != state.chat_id:
             await bot.send_message(chat_id=chat_id, text="❌ У вас нет прав для этой команды.")
