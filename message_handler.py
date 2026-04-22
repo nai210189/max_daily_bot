@@ -7,7 +7,7 @@ from maxapi.types import MessageCreated, Command, BotStarted
 
 from config import MY_TIMEZONE, MESSAGES_FILE, SEND_HOUR, SEND_MINUTE
 from bot_state import state
-from utils import save_chat_id, load_messages, get_chat_id_from_event
+from utils import save_chat_id, load_messages
 from keywords_handler import get_keywords_config, reload_keywords_config, send_keyword_response
 
 logger = logging.getLogger(__name__)
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 async def ensure_chat_id(event: MessageCreated) -> None:
     """Сохраняет chat_id из события"""
-    # ✅ Правильный способ для вашей версии библиотеки
+    # Правильный способ для вашей версии библиотеки
     if hasattr(event.message, 'chat') and hasattr(event.message.chat, 'id'):
         chat_id = event.message.chat.id
     else:
@@ -66,8 +66,7 @@ def register_handlers(dp):
             messages = load_messages()
             test_text = random.choice(messages)
             await event.message.answer(f"🧪 Тест:\n\n{test_text}")
-            chat_id = get_chat_id_from_event(event)
-            logger.debug(f"Тест отправлен в чат {chat_id}")
+            logger.debug(f"Тест отправлен в чат {event.message.chat.id if hasattr(event.message, 'chat') else 'unknown'}")
         except Exception as e:
             await event.message.answer(f"❌ Ошибка: {e}")
             logger.error(f"Ошибка в /test: {e}")
@@ -142,12 +141,12 @@ def register_handlers(dp):
         if state.chat_id is not None and current_chat_id != state.chat_id:
             await event.message.answer("❌ У вас нет прав для этой команды.")
             return
-    
-    try:
-        reload_keywords_config()
-        await event.message.answer("✅ Ключевые слова успешно перезагружены из keywords.json!")
-    except Exception as e:
-        await event.message.answer(f"❌ Ошибка при перезагрузке: {e}")
+        
+        try:
+            reload_keywords_config()
+            await event.message.answer("✅ Ключевые слова успешно перезагружены из keywords.json!")
+        except Exception as e:
+            await event.message.answer(f"❌ Ошибка при перезагрузке: {e}")
 
     @dp.message_created(F.message.body.text)
     async def handle_keywords(event: MessageCreated):
