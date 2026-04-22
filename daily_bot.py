@@ -28,9 +28,6 @@ async def main():
     
     # Инициализируем базу данных
     await init_db(DATABASE_URL)
-
-    from db import migrate_from_files_to_db
-    await migrate_from_files_to_db()
     
     # Регистрируем обработчики команд
     register_handlers(dp, bot)
