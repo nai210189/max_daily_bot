@@ -17,5 +17,5 @@ CHAT_ID_FILE: Final[Path] = Path("chat_id.txt")
 KEYWORDS_FILE: Final[Path] = Path("keywords.json")
 
 # ===== ВРЕМЯ ОТПРАВКИ =====
-SEND_HOUR = 12
-SEND_MINUTE = 30
+SEND_HOUR = 9
+SEND_MINUTE = 0
