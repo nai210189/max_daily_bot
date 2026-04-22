@@ -111,7 +111,7 @@ def register_handlers(dp: Dispatcher, bot: Bot):
             return
         
         try:
-            messages = await load_messages()
+            messages = load_messages()
             test_text = random.choice(messages)
             await bot.send_message(chat_id=chat_id, text=f"🧪 Тест:\n\n{test_text}")
             logger.debug(f"Тест отправлен в чат {chat_id}")
@@ -134,7 +134,7 @@ def register_handlers(dp: Dispatcher, bot: Bot):
             return
         
         new_message = parts[1].strip()
-        await add_message(new_message)
+        add_message(new_message)
         await bot.send_message(chat_id=chat_id, text=f"✅ Добавлено:\n\n{new_message}")
         logger.info(f"Добавлено сообщение: {new_message[:50]}...")
 
@@ -146,7 +146,7 @@ def register_handlers(dp: Dispatcher, bot: Bot):
             return
         
         try:
-            messages = await load_messages()
+            messages = load_messages()
             if not messages:
                 await bot.send_message(chat_id=chat_id, text="📭 База пуста.")
                 return
@@ -171,18 +171,19 @@ def register_handlers(dp: Dispatcher, bot: Bot):
             return
         
         try:
-            # Используем асинхронные функции
-            total = await get_messages_count()
-            total_length = await get_messages_total_length()
-            avg_len = total_length // total if total else 0
-            keywords_count = await get_keywords_count()
+            messages = load_messages()
+            total = len(messages)
+            avg_len = sum(len(m) for m in messages) // total if total else 0
+            size_kb = MESSAGES_FILE.stat().st_size / 1024
+            keywords_count = len(get_keywords_config())
             
             stats_text = (
                 f"📊 **Статистика**\n\n"
                 f"• Сообщений в базе: {total}\n"
                 f"• Средняя длина: {avg_len} симв.\n"
-                f"• Ключевых слов: {keywords_count}\n"
+                f"• Размер файла: {size_kb:.1f} KB\n"
                 f"• Время отправки: {SEND_HOUR:02d}:{SEND_MINUTE:02d}\n"
+                f"• Ключевых слов (наборов): {keywords_count}\n"
                 f"• Чат: {'активирован' if state.chat_id else 'не активирован'}"
             )
             await bot.send_message(chat_id=chat_id, text=stats_text, parse_mode="markdown")
@@ -229,7 +230,7 @@ def register_handlers(dp: Dispatcher, bot: Bot):
         if len(text_lower) > 100:
             return
         
-        responses = get_keywords_config()
+        responses = get_keywords_config()  # ← Это НЕ асинхронная функция
         for response in responses:
             keywords = response.get("keywords", [])
             for keyword in keywords:
