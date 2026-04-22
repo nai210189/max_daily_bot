@@ -28,14 +28,23 @@ def register_handlers(dp: Dispatcher, bot: Bot):
     @dp.bot_started()
     async def on_bot_started(event: BotStarted):
         """Пользователь нажал 'Начать'"""
-        chat_id = event.chat_id
-        state.chat_id = chat_id
-        save_chat_id(chat_id)
-        await bot.send_message(
-            chat_id=chat_id,
-            text="✅ Бот активирован! Теперь каждый день в 9:00 я буду присылать сообщение.\n\nОтправьте /menu для управления."
-        )
-        logger.info(f"Бот активирован в чате {chat_id}")
+        # Для BotStarted chat_id может быть в другом месте
+        chat_id = None
+        if hasattr(event, 'chat_id'):
+            chat_id = event.chat_id
+        elif hasattr(event, 'chat') and hasattr(event.chat, 'chat_id'):
+            chat_id = event.chat.chat_id
+        
+        if chat_id:
+            state.chat_id = chat_id
+            save_chat_id(chat_id)
+            await bot.send_message(
+                chat_id=chat_id,
+                text="✅ Бот активирован!\n\nОтправьте /menu для управления."
+            )
+            logger.info(f"Бот активирован в чате {chat_id}")
+        else:
+            logger.warning("Не удалось получить chat_id в on_bot_started")
     
     # ===== ОСНОВНЫЕ КОМАНДЫ =====
     
