@@ -1,4 +1,5 @@
 import logging
+import random
 from pathlib import Path
 
 from config import CHAT_ID_FILE, MESSAGES_FILE
@@ -75,3 +76,21 @@ def get_chat_id_from_event(event) -> int | None:
         logger.error(f"event.message атрибуты: {dir(event.message)}")
     
     return None
+
+
+def add_message(text: str) -> None:
+    """Добавляет новое сообщение в базу"""
+    with MESSAGES_FILE.open('a', encoding='utf-8') as f:
+        f.write(f"\n{text}")
+    logger.info(f"Добавлено сообщение: {text[:50]}...")
+
+
+def clear_messages() -> None:
+    """Очищает базу сообщений"""
+    MESSAGES_FILE.write_text('', encoding='utf-8')
+    logger.info("База сообщений очищена")
+
+
+def get_random_message(messages: list[str]) -> str:
+    """Возвращает случайное сообщение из списка"""
+    return random.choice(messages)
