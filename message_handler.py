@@ -14,10 +14,12 @@ logger = logging.getLogger(__name__)
 
 
 async def ensure_chat_id(event: MessageCreated) -> None:
-    """Сохраняет chat_id из события (универсальный способ)"""
-    chat_id = get_chat_id_from_event(event)
-    if chat_id is None:
-        logger.warning("Не удалось получить chat_id, пропускаем")
+    """Сохраняет chat_id из события"""
+    # ✅ Правильный способ для вашей версии библиотеки
+    if hasattr(event.message, 'chat') and hasattr(event.message.chat, 'id'):
+        chat_id = event.message.chat.id
+    else:
+        logger.warning("Не удалось получить chat_id из event.message.chat.id")
         return
     
     if state.chat_id != chat_id:
@@ -133,22 +135,24 @@ def register_handlers(dp):
 
     @dp.message_created(Command('reload'))
     async def cmd_reload(event: MessageCreated):
-        current_chat_id = get_chat_id_from_event(event)
+        """Перезагружает ключевые слова из JSON файла"""
+        # Получаем chat_id
+        current_chat_id = event.message.chat.id if hasattr(event.message, 'chat') else None
+        
         if state.chat_id is not None and current_chat_id != state.chat_id:
             await event.message.answer("❌ У вас нет прав для этой команды.")
             return
-        try:
-            reload_keywords_config()
-            await event.message.answer("✅ Ключевые слова успешно перезагружены из keywords.json!")
-        except Exception as e:
-            await event.message.answer(f"❌ Ошибка при перезагрузке: {e}")
+    
+    try:
+        reload_keywords_config()
+        await event.message.answer("✅ Ключевые слова успешно перезагружены из keywords.json!")
+    except Exception as e:
+        await event.message.answer(f"❌ Ошибка при перезагрузке: {e}")
 
     @dp.message_created(F.message.body.text)
     async def handle_keywords(event: MessageCreated):
-        """
-        Отвечает на сообщения по ключевым словам из JSON файла.
-        """
-        # Получаем текст сообщения
+        """Отвечает на сообщения по ключевым словам"""
+        # Получаем текст
         text = event.message.body.text if event.message.body else ''
         text_lower = text.lower().strip()
         
@@ -160,6 +164,9 @@ def register_handlers(dp):
         if len(text_lower) > 100:
             return
         
+        # Получаем chat_id для лога
+        chat_id = event.message.chat.id if hasattr(event.message, 'chat') else 'unknown'
+        
         # Загружаем конфигурацию
         responses = get_keywords_config()
         
@@ -168,8 +175,7 @@ def register_handlers(dp):
             keywords = response.get("keywords", [])
             for keyword in keywords:
                 if keyword.lower() in text_lower:
-                    # ✅ Исправлено: используем event.message.chat_id
-                    logger.info(f"Сработало ключевое слово '{keyword}' в чате {event.message.chat_id}")
+                    logger.info(f"Сработало ключевое слово '{keyword}' в чате {chat_id}")
                     await send_keyword_response(event, response)
                     return
 
