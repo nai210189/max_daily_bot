@@ -1,0 +1,4 @@
+maxapi==1.0.0
+asyncpg
+pytz
+python-dotenv
